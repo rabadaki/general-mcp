@@ -158,4 +158,4 @@ To use with Claude Desktop, add this to your configuration:
 
 ## License
 
-MIT License - feel free to use and modify as needed! 
+MIT License - feel free to use and modify as needed! # Force redeploy
