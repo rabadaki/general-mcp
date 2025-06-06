@@ -79,6 +79,17 @@ rl.on('line', async (line) => {
     }
 
     const result = await response.json();
+    
+    // Validate the response structure before sending
+    if (result && typeof result === 'object') {
+      if (!result.jsonrpc) {
+        result.jsonrpc = "2.0";
+      }
+      if (messageId !== null && messageId !== undefined && !result.id) {
+        result.id = messageId;
+      }
+    }
+    
     console.log(JSON.stringify(result));
   } catch (error) {
     // Only send error response for requests that expect a response (have an id)
