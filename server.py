@@ -42,7 +42,7 @@ from fastmcp import FastMCP
 import uvicorn
 from starlette.applications import Starlette
 from starlette.routing import Route
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from mcp.server.sse import SseServerTransport
 from starlette.requests import Request
 
@@ -1513,20 +1513,32 @@ def create_sse_app():
     sse = SseServerTransport("/sse")
     
     async def handle_sse(request: Request):
-        async def app(scope, receive, send):
-            async with sse.connect_sse(scope, receive, send) as streams:
+        """Handle SSE connection for MCP."""
+        try:
+            async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
                 await mcp.run_sse(*streams)
-        
-        await app(request.scope, request.receive, request._send)
+        except Exception as e:
+            print(f"SSE connection error: {e}")
+            # Return a proper SSE response even on error
+            return Response(
+                content=f"event: error\ndata: {str(e)}\n\n",
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Methods": "*"
+                }
+            )
     
     async def handle_health(request: Request):
         return JSONResponse({"status": "healthy", "server": "General MCP Server"})
     
     return Starlette(
         routes=[
-            Route("/sse", endpoint=handle_sse),
+            Route("/sse", endpoint=handle_sse, methods=["GET", "POST"]),
             Route("/health", endpoint=handle_health),
-            Route("/sse/{path:path}", methods=["POST"], endpoint=sse.handle_post_message),
         ],
         debug=True
     )
