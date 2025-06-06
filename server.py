@@ -1510,7 +1510,7 @@ Error: {str(e)}
 def create_sse_app():
     """Create a Starlette app with SSE transport for the MCP server."""
     
-    sse = SseServerTransport("/messages")
+    sse = SseServerTransport("/sse")
     
     async def handle_sse(request: Request):
         async def app(scope, receive, send):
@@ -1526,7 +1526,7 @@ def create_sse_app():
         routes=[
             Route("/sse", endpoint=handle_sse),
             Route("/health", endpoint=handle_health),
-            Route("/messages/{path:path}", methods=["POST"], endpoint=sse.handle_post_message),
+            Route("/sse/{path:path}", methods=["POST"], endpoint=sse.handle_post_message),
         ],
         debug=True
     )
