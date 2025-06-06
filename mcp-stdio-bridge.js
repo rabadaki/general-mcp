@@ -83,15 +83,17 @@ rl.on('line', async (line) => {
   } catch (error) {
     // Only send error response for requests that expect a response (have an id)
     if (messageId !== null && messageId !== undefined) {
-      console.log(JSON.stringify({
+      const errorResponse = {
         jsonrpc: "2.0",
         id: messageId,
         error: {
-          code: -32000,
-          message: error.message
+          code: -32603,
+          message: `Internal error: ${error.message}`
         }
-      }));
+      };
+      console.log(JSON.stringify(errorResponse));
     }
+    // For notifications (no id), silently ignore errors
   }
 });
 
