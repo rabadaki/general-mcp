@@ -1513,12 +1513,11 @@ def create_sse_app():
     sse = SseServerTransport("/messages")
     
     async def handle_sse(request: Request):
-        async with sse.connect_sse(
-            request.scope,
-            request.receive,
-            request.send
-        ) as streams:
-            await mcp.run_sse(*streams)
+        async def app(scope, receive, send):
+            async with sse.connect_sse(scope, receive, send) as streams:
+                await mcp.run_sse(*streams)
+        
+        await app(request.scope, request.receive, request._send)
     
     async def handle_health(request: Request):
         return JSONResponse({"status": "healthy", "server": "General MCP Server"})
