@@ -1516,7 +1516,7 @@ def create_sse_app():
         async with sse.connect_sse(
             request.scope,
             request.receive,
-            request._send
+            request.send
         ) as streams:
             await mcp.run_sse(*streams)
     
