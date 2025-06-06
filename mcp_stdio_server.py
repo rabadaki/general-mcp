@@ -322,9 +322,9 @@ class MCPServer:
         """Handle MCP protocol messages - used by both stdio and HTTP modes."""
         try:
             method = message.get("method")
-            message_id = message.get("id")
+            message_id = message.get("id", 0)  # Default to 0 if no ID provided
             
-            logger.info(f"Handling method: {method}")
+            logger.info(f"Handling method: {method} (id: {message_id})")
             
             if method == "initialize":
                 return {
@@ -433,7 +433,7 @@ class MCPServer:
             logger.error(f"Error handling message: {e}")
             return {
                 "jsonrpc": "2.0",
-                "id": message.get("id"),
+                "id": message.get("id", 0),  # Default to 0 if no ID
                 "error": {
                     "code": -32603,
                     "message": f"Internal error: {str(e)}"
