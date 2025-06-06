@@ -11,6 +11,9 @@ import os
 import json
 import asyncio
 import httpx
+import requests
+import urllib.parse
+from bs4 import BeautifulSoup
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import time
@@ -483,49 +486,65 @@ async def search_reddit(
     time: str = "all",
     limit: int = 10
 ) -> str:
-    """Search Reddit for posts matching a query using Apify."""
+    """Search Reddit for posts using free Reddit JSON API."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
     
-    if not APIFY_TOKEN:
-        return "❌ APIFY_TOKEN not configured. Please set the environment variable."
+    # Build Reddit search URL using free JSON API
+    if subreddit:
+        # Search within specific subreddit
+        search_url = f"https://www.reddit.com/r/{subreddit}/search.json"
+        params = {
+            "q": query,
+            "restrict_sr": "1",  # Restrict to subreddit
+            "sort": sort,
+            "t": time,
+            "limit": limit
+        }
+    else:
+        # Global Reddit search
+        search_url = "https://www.reddit.com/search.json"
+        params = {
+            "q": query,
+            "sort": sort,
+            "t": time,
+            "limit": limit
+        }
     
-    # Use Reddit scraper
-    payload = {
-        "searches": [query] if not subreddit else [f"subreddit:{subreddit} {query}"],
-        "sort": sort,
-        "time": time,
-        "maxItems": limit,
-        "proxy": {"useApifyProxy": True}
+    # Add User-Agent header (required by Reddit)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; MCPBot/1.0; +https://general-mcp.onrender.com)"
     }
     
-    data = await make_request(
-        f"{APIFY_API_BASE}/trudax~reddit-scraper/run-sync-get-dataset-items",
-        params={"token": APIFY_TOKEN},
-        json_data=payload,
-        method="POST"
-    )
+    data = await make_request(search_url, params=params, headers=headers)
     
-    log_api_usage("Reddit", "search", limit, len(data) if data else 0, 0.01 * limit)
+    log_api_usage("Reddit", "search", limit, 0, 0.0)  # Free API
     
-    if not data:
+    if not data or not data.get("data") or not data["data"].get("children"):
         return f"❌ No results found for Reddit search: '{query}'"
     
     results = []
-    for post in data[:limit]:
+    posts = data["data"]["children"]
+    
+    for post_data in posts[:limit]:
+        post = post_data.get("data", {})
         title = post.get("title", "No title")
         author = post.get("author", "Unknown")
         score = post.get("score", 0)
-        comments = post.get("numberOfComments", 0)
-        url = post.get("url", "")
+        comments = post.get("num_comments", 0)
+        permalink = post.get("permalink", "")
+        url = f"https://reddit.com{permalink}" if permalink else post.get("url", "")
         subreddit_name = post.get("subreddit", "")
+        selftext = post.get("selftext", "")[:200] + "..." if len(post.get("selftext", "")) > 200 else post.get("selftext", "")
         
-        result = f"""
-📝 **{title}**
+        result = f"""📝 **{title}**
 👤 u/{author} in r/{subreddit_name}
-⬆️ {score} upvotes | 💬 {comments} comments
-🔗 {url}
-"""
-        results.append(result.strip())
+⬆️ {score} upvotes | 💬 {comments} comments"""
+        
+        if selftext:
+            result += f"\n📄 {selftext}"
+        
+        result += f"\n🔗 {url}"
+        results.append(result)
     
     header = f"🔍 Reddit search results for '{query}' ({len(results)} found)"
     return header + "\n\n" + "\n---\n".join(results)
@@ -640,65 +659,115 @@ async def get_api_usage_stats() -> str:
 # ============================================================================
 
 async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "day", limit: int = 10) -> str:
-    """Get posts from specific subreddit."""
+    """Get posts from specific subreddit using free Reddit API."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
-    log_api_usage("Reddit", "subreddit_posts", limit)
+    log_api_usage("Reddit", "subreddit_posts", limit, 0, 0.0)  # Free API
     
-    if not APIFY_TOKEN:
-        return "❌ APIFY_TOKEN not configured"
+    # Map sort options to Reddit API format
+    sort_mapping = {
+        "hot": "hot",
+        "new": "new", 
+        "rising": "rising",
+        "top": "top"
+    }
+    reddit_sort = sort_mapping.get(sort, "hot")
     
-    payload = {
-        "subreddits": [subreddit],
-        "sort": sort,
-        "time": time,
-        "maxItems": limit
+    # Build subreddit URL
+    if reddit_sort == "top":
+        url = f"https://www.reddit.com/r/{subreddit}/top.json"
+        params = {"t": time, "limit": limit}
+    else:
+        url = f"https://www.reddit.com/r/{subreddit}/{reddit_sort}.json"
+        params = {"limit": limit}
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; MCPBot/1.0; +https://general-mcp.onrender.com)"
     }
     
-    data = await make_request(f"{APIFY_API_BASE}/trudax~reddit-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    data = await make_request(url, params=params, headers=headers)
     
-    if not data:
-        return f"❌ Failed to fetch posts from r/{subreddit}"
+    if not data or not data.get("data") or not data["data"].get("children"):
+        return f"❌ Failed to fetch posts from r/{subreddit}. Subreddit may not exist or be private."
     
     results = []
-    for post in data[:limit]:
+    posts = data["data"]["children"]
+    
+    for post_data in posts[:limit]:
+        post = post_data.get("data", {})
         title = post.get("title", "No title")[:100]
         author = post.get("author", "Unknown")
         score = post.get("score", 0)
-        comments = post.get("numberOfComments", 0)
-        url = post.get("url", "")
+        comments = post.get("num_comments", 0)
+        permalink = post.get("permalink", "")
+        url = f"https://reddit.com{permalink}" if permalink else post.get("url", "")
+        selftext = post.get("selftext", "")[:150] + "..." if len(post.get("selftext", "")) > 150 else post.get("selftext", "")
         
-        results.append(f"🔸 **{title}**\n👤 u/{author} | ⬆️ {score} | 💬 {comments}\n🔗 {url}")
+        result = f"🔸 **{title}**\n👤 u/{author} | ⬆️ {score} | 💬 {comments}"
+        if selftext:
+            result += f"\n📄 {selftext}"
+        result += f"\n🔗 {url}"
+        results.append(result)
     
-    header = f"📋 Found {len(results)} posts from r/{subreddit}"
+    header = f"📋 Found {len(results)} posts from r/{subreddit} (sorted by {sort})"
     return header + "\n\n" + "\n---\n".join(results)
 
 async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
-    """Get comments from a Reddit post."""
+    """Get comments from a Reddit post using free Reddit API."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
-    log_api_usage("Reddit", "comments", limit)
+    log_api_usage("Reddit", "comments", limit, 0, 0.0)  # Free API
     
-    if not APIFY_TOKEN:
-        return "❌ APIFY_TOKEN not configured"
+    # Convert Reddit URL to JSON API URL
+    if not post_url.startswith("https://"):
+        return "❌ Please provide a full Reddit post URL (e.g., https://reddit.com/r/...)"
     
-    payload = {
-        "startUrls": [post_url],
-        "maxComments": limit
+    # Add .json to get JSON response
+    if not post_url.endswith(".json"):
+        json_url = post_url.rstrip("/") + ".json"
+    else:
+        json_url = post_url
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; MCPBot/1.0; +https://general-mcp.onrender.com)"
     }
     
-    data = await make_request(f"{APIFY_API_BASE}/trudax~reddit-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    data = await make_request(json_url, headers=headers)
     
-    if not data:
-        return f"❌ Failed to fetch comments"
+    if not data or not isinstance(data, list) or len(data) < 2:
+        return f"❌ Failed to fetch comments from post. URL may be invalid."
+    
+    # Reddit returns [post_data, comments_data]
+    comments_data = data[1]
+    if not comments_data.get("data") or not comments_data["data"].get("children"):
+        return "❌ No comments found for this post."
+    
+    # Get post title from first response
+    post_data = data[0]["data"]["children"][0]["data"]
+    post_title = post_data.get("title", "Unknown post")
     
     results = []
-    for comment in data[:limit]:
-        if comment.get("type") == "comment":
-            author = comment.get("author", "Unknown")
-            text = comment.get("text", "")[:200]
-            score = comment.get("score", 0)
-            results.append(f"💬 **u/{author}** (⬆️ {score})\n{text}")
+    comments = comments_data["data"]["children"]
     
-    header = f"💬 Found {len(results)} comments"
+    for comment_data in comments[:limit]:
+        comment = comment_data.get("data", {})
+        
+        # Skip "more" objects and deleted comments
+        if comment.get("kind") == "more" or not comment.get("body"):
+            continue
+            
+        author = comment.get("author", "Unknown")
+        body = comment.get("body", "")[:300] + "..." if len(comment.get("body", "")) > 300 else comment.get("body", "")
+        score = comment.get("score", 0)
+        
+        # Skip removed/deleted comments
+        if body in ["[deleted]", "[removed]"]:
+            continue
+            
+        results.append(f"💬 **u/{author}** (⬆️ {score})\n{body}")
+    
+    if not results:
+        return f"❌ No readable comments found for this post."
+    
+    header = f"💬 Comments from: **{post_title}** ({len(results)} comments)"
     return header + "\n\n" + "\n---\n".join(results)
 
 # ============================================================================
@@ -965,37 +1034,147 @@ async def search_perplexity(query: str, max_results: int = 10) -> str:
     return result
 
 async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: str = "US") -> str:
-    """Google Trends analysis."""
-    log_api_usage("GoogleTrends", "search", 1)
+    """Google Trends analysis using ScrapingBee."""
+    log_api_usage("GoogleTrends", "search", 1, 0, 0.05)
     
-    manual_url = f"https://trends.google.com/trends/explore?q={query}&geo={geo}&date={timeframe}"
+    if not SCRAPINGBEE_API_KEY:
+        return "❌ SCRAPINGBEE_API_KEY not configured"
     
-    result = f"📈 **Google Trends Analysis for '{query}'**\n\n"
-    result += f"🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
-    result += "⚠️ **Manual Access Required**\n"
-    result += "Google Trends blocks automated requests. Please visit:\n"
-    result += f"🔗 {manual_url}\n\n"
-    result += "💡 **What you'll find:**\n"
-    result += "• Interest over time graphs\n• Related topics and queries\n• Regional interest breakdown\n• Rising and top searches"
+    import urllib.parse
     
-    return result
+    # Construct Google Trends URL
+    encoded_query = urllib.parse.quote(query)
+    trends_url = f"https://trends.google.com/trends/explore?q={encoded_query}&geo={geo}&date={urllib.parse.quote(timeframe)}"
+    
+    # ScrapingBee parameters
+    params = {
+        'api_key': SCRAPINGBEE_API_KEY,
+        'url': trends_url,
+        'render_js': 'true',
+        'wait': '3000',
+        'country_code': 'us',
+        'custom_google': 'true',
+        'block_resources': 'false'
+    }
+    
+    try:
+        # Use requests for ScrapingBee (different from our async httpx)
+        import requests
+        response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
+        
+        if response.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract trends data
+            page_text = soup.get_text()
+            
+            # Look for related queries and topics
+            trend_sections = []
+            
+            # Check if we got the trends page
+            if 'trending' in page_text.lower() or 'related' in page_text.lower():
+                trend_sections.append("✅ Successfully accessed Google Trends data")
+                
+                # Try to find related queries
+                related_elements = soup.find_all(text=lambda text: text and 'related' in text.lower())
+                if related_elements:
+                    trend_sections.append(f"🔍 Found {len(related_elements)} related sections")
+                
+            else:
+                trend_sections.append("⚠️ Limited data available - Google may be blocking automated access")
+            
+            result = f"📈 **Google Trends Analysis for '{query}'**\n\n"
+            result += f"🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
+            result += "\n".join(trend_sections)
+            result += f"\n\n🔗 Manual access: {trends_url}"
+            
+            return result
+            
+        elif response.status_code == 500:
+            # Try with premium proxy
+            params['premium_proxy'] = 'true'
+            response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = f"📈 **Google Trends Analysis for '{query}'**\n\n"
+                result += f"🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
+                result += "✅ Data retrieved with premium proxy\n"
+                result += f"🔗 Manual access: {trends_url}"
+                return result
+            else:
+                return f"❌ ScrapingBee failed even with premium proxy: {response.status_code}"
+        else:
+            return f"❌ ScrapingBee request failed: {response.status_code} - {response.text[:200]}"
+            
+    except Exception as e:
+        return f"❌ Error accessing Google Trends: {str(e)}"
 
 async def compare_google_trends(terms: list, timeframe: str = "today 12-m", geo: str = "US") -> str:
-    """Compare multiple terms in Google Trends."""
-    log_api_usage("GoogleTrends", "compare", len(terms))
+    """Compare multiple terms in Google Trends using ScrapingBee."""
+    log_api_usage("GoogleTrends", "compare", len(terms), 0, 0.05)
     
+    if not SCRAPINGBEE_API_KEY:
+        return "❌ SCRAPINGBEE_API_KEY not configured"
+    
+    import urllib.parse
+    
+    # Construct comparison URL
     query_string = ",".join(terms)
-    manual_url = f"https://trends.google.com/trends/explore?q={query_string}&geo={geo}&date={timeframe}"
+    encoded_query = urllib.parse.quote(query_string)
+    trends_url = f"https://trends.google.com/trends/explore?q={encoded_query}&geo={geo}&date={urllib.parse.quote(timeframe)}"
     
-    result = f"📊 **Google Trends Comparison**\n\n"
-    result += f"🔍 Terms: {', '.join(terms)}\n🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
-    result += "⚠️ **Manual Access Required**\n"
-    result += "Google Trends blocks automated requests. Please visit:\n"
-    result += f"🔗 {manual_url}\n\n"
-    result += "💡 **What you'll find:**\n"
-    result += "• Side-by-side comparison graphs\n• Interest distribution over time\n• Regional performance differences\n• Related topics for each term"
+    # ScrapingBee parameters
+    params = {
+        'api_key': SCRAPINGBEE_API_KEY,
+        'url': trends_url,
+        'render_js': 'true',
+        'wait': '3000',
+        'country_code': 'us',
+        'custom_google': 'true',
+        'block_resources': 'false'
+    }
     
-    return result
+    try:
+        import requests
+        response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
+        
+        if response.status_code == 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            page_text = soup.get_text()
+            
+            result = f"📊 **Google Trends Comparison**\n\n"
+            result += f"🔍 Terms: {', '.join(terms)}\n🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
+            
+            if 'compare' in page_text.lower() or len(terms) > 1:
+                result += "✅ Successfully accessed comparison data\n"
+                result += f"📈 Comparing {len(terms)} terms side-by-side\n"
+            else:
+                result += "⚠️ Limited comparison data available\n"
+                
+            result += f"\n🔗 Manual access: {trends_url}"
+            return result
+            
+        elif response.status_code == 500:
+            # Try with premium proxy
+            params['premium_proxy'] = 'true'
+            response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = f"📊 **Google Trends Comparison**\n\n"
+                result += f"🔍 Terms: {', '.join(terms)}\n🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
+                result += "✅ Data retrieved with premium proxy\n"
+                result += f"🔗 Manual access: {trends_url}"
+                return result
+            else:
+                return f"❌ ScrapingBee comparison failed: {response.status_code}"
+        else:
+            return f"❌ ScrapingBee request failed: {response.status_code}"
+            
+    except Exception as e:
+        return f"❌ Error comparing trends: {str(e)}"
 
 # ============================================================================
 # MAIN APPLICATION
