@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "general-search": {
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-sse",
+        "https://general-mcp-production.up.railway.app/sse"
+      ]
+    }
+  }
+} 

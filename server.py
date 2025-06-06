@@ -38,11 +38,14 @@ import requests
 from bs4 import BeautifulSoup
 
 # MCP and web framework
-from fastmcp import FastMCP
+import mcp.server.stdio
+import mcp.types as types
+from mcp.server import Server
+from mcp.server.sse import SseServerTransport
 import uvicorn
 from starlette.applications import Starlette
 from starlette.routing import Route
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 from starlette.requests import Request
 
 # Environment and configuration
@@ -52,8 +55,8 @@ import os
 # CONFIGURATION & CONSTANTS
 # ============================================================================
 
-# Initialize FastMCP server
-mcp = FastMCP("General Search")
+# Initialize MCP server
+server = Server("General Search")
 
 # API Endpoints
 REDDIT_BASE_URL = "https://www.reddit.com"
@@ -300,7 +303,231 @@ async def make_request(
     return None
 
 # REDDIT TOOLS
-@mcp.tool()
+@server.list_tools()
+async def handle_list_tools() -> list[types.Tool]:
+    """Return a list of all available tools."""
+    tools = [
+        types.Tool(
+            name="search_reddit",
+            description="Search Reddit for posts matching a query",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search terms to look for"},
+                    "subreddit": {"type": "string", "description": "Specific subreddit to search (optional)"},
+                    "sort": {"type": "string", "description": "Sort order (relevance, hot, top, new, comments)"},
+                    "time": {"type": "string", "description": "Time period (all, year, month, week, day, hour)"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="get_subreddit_posts",
+            description="Get top posts from a specific subreddit",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "subreddit": {"type": "string", "description": "Name of the subreddit (without r/)"},
+                    "sort": {"type": "string", "description": "Sort order (hot, new, top, rising)"},
+                    "time": {"type": "string", "description": "Time period for top posts"},
+                    "limit": {"type": "integer", "description": "Number of posts to return (max 50)"}
+                },
+                "required": ["subreddit"]
+            }
+        ),
+        types.Tool(
+            name="get_reddit_comments",
+            description="Get comments from a Reddit post",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "post_url": {"type": "string", "description": "Full URL to the Reddit post"},
+                    "limit": {"type": "integer", "description": "Number of top-level comments to return (max 50)"}
+                },
+                "required": ["post_url"]
+            }
+        ),
+        types.Tool(
+            name="search_youtube",
+            description="Search YouTube for videos matching a query",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search terms to look for"},
+                    "published_after": {"type": "string", "description": "ISO date string (e.g., '2024-01-01T00:00:00Z')"},
+                    "published_before": {"type": "string", "description": "ISO date string (e.g., '2024-12-31T23:59:59Z')"},
+                    "order": {"type": "string", "description": "Sort order (relevance, date, rating, viewCount, title, videoCount)"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="get_youtube_trending",
+            description="Get trending YouTube videos",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Category ID (0=All, 1=Film, 2=Autos, 10=Music, etc.)"},
+                    "region": {"type": "string", "description": "Country code (US, GB, CA, AU, DE, FR, JP, etc.)"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
+            name="search_twitter",
+            description="Search Twitter for posts matching a query",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search terms to look for"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"},
+                    "sort": {"type": "string", "description": "Sort order (Latest, Top)"},
+                    "days_back": {"type": "integer", "description": "How many days back to search (1-7)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="get_user_tweets",
+            description="Get recent tweets from a specific user",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "username": {"type": "string", "description": "Twitter username (without @)"},
+                    "limit": {"type": "integer", "description": "Number of tweets to return (max 50)"},
+                    "days_back": {"type": "integer", "description": "How many days back to search (1-7)"}
+                },
+                "required": ["username"]
+            }
+        ),
+        types.Tool(
+            name="search_perplexity",
+            description="Search using Perplexity AI for intelligent web search",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for intelligent web search"},
+                    "max_results": {"type": "integer", "description": "Number of results to return (max 20)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="search_web",
+            description="Search the web using DuckDuckGo",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search terms"},
+                    "max_results": {"type": "integer", "description": "Number of results to return (max 20)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="search_tiktok",
+            description="Search TikTok for videos matching a query",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search terms"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"},
+                    "days_back": {"type": "integer", "description": "How many days back to search (1-30)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="get_tiktok_user_videos",
+            description="Get recent videos from a specific TikTok user",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "username": {"type": "string", "description": "TikTok username (without @)"},
+                    "limit": {"type": "integer", "description": "Number of videos to return (max 50)"}
+                },
+                "required": ["username"]
+            }
+        ),
+        types.Tool(
+            name="search_google_trends",
+            description="Search Google Trends data",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search term to analyze trends for"},
+                    "geo": {"type": "string", "description": "Geographic location (US, GB, CA, etc.)"},
+                    "timeframe": {"type": "string", "description": "Time period (today 12-m, today 5-y, all, etc.)"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="compare_google_trends",
+            description="Compare multiple terms on Google Trends",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "queries": {"type": "string", "description": "Comma-separated list of search terms to compare"},
+                    "geo": {"type": "string", "description": "Geographic location (US, GB, CA, etc.)"},
+                    "timeframe": {"type": "string", "description": "Time period (today 12-m, today 5-y, all, etc.)"},
+                    "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+                },
+                "required": ["queries"]
+            }
+        ),
+        types.Tool(
+            name="get_api_usage_stats",
+            description="Get comprehensive API usage statistics",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        )
+    ]
+    return tools
+
+@server.call_tool()
+async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    """Handle tool calls."""
+    if name == "search_reddit":
+        result = await search_reddit(**arguments)
+    elif name == "get_subreddit_posts":
+        result = await get_subreddit_posts(**arguments)
+    elif name == "get_reddit_comments":
+        result = await get_reddit_comments(**arguments)
+    elif name == "search_youtube":
+        result = await search_youtube(**arguments)
+    elif name == "get_youtube_trending":
+        result = await get_youtube_trending(**arguments)
+    elif name == "search_twitter":
+        result = await search_twitter(**arguments)
+    elif name == "get_user_tweets":
+        result = await get_user_tweets(**arguments)
+    elif name == "search_perplexity":
+        result = await search_perplexity(**arguments)
+    elif name == "search_web":
+        result = await search_web(**arguments)
+    elif name == "search_tiktok":
+        result = await search_tiktok(**arguments)
+    elif name == "get_tiktok_user_videos":
+        result = await get_tiktok_user_videos(**arguments)
+    elif name == "search_google_trends":
+        result = await search_google_trends(**arguments)
+    elif name == "compare_google_trends":
+        result = await compare_google_trends(**arguments)
+    elif name == "get_api_usage_stats":
+        result = await get_api_usage_stats(**arguments)
+    else:
+        raise ValueError(f"Unknown tool: {name}")
+    
+    return [types.TextContent(type="text", text=str(result))]
+
 async def search_reddit(
     query: str,
     subreddit: str = "",
@@ -864,7 +1091,6 @@ async def get_user_tweets(
     return header + "\n\n" + "\n---\n".join(results)
 
 # PERPLEXITY SEARCH TOOL
-@mcp.tool()
 async def search_perplexity(
     query: str,
     max_results: int = 10
@@ -1506,161 +1732,19 @@ Error: {str(e)}
 
 💡 **Alternative**: Try individual searches for each term using the search_google_trends tool"""
 
-def create_sse_app():
-    """Create a Starlette app with HTTP MCP transport."""
-    
-    async def handle_mcp(request: Request):
-        """Handle MCP requests over HTTP."""
-        if request.method == "POST":
-            try:
-                data = await request.json()
-                method = data.get("method")
-                
-                if method == "initialize":
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": data.get("id"),
-                        "result": {
-                            "protocolVersion": "2024-11-05",
-                            "capabilities": {
-                                "tools": {}
-                            },
-                            "serverInfo": {
-                                "name": "General Search",
-                                "version": "2.0.0"
-                            }
-                        }
-                    })
-                
-                elif method == "tools/list":
-                    # Get all tools from FastMCP
-                    tools = []
-                    for tool_name, tool_func in mcp._tools.items():
-                        # Extract parameter info from function signature
-                        import inspect
-                        sig = inspect.signature(tool_func)
-                        
-                        properties = {}
-                        required = []
-                        
-                        for param_name, param in sig.parameters.items():
-                            if param_name in ['self', 'args', 'kwargs']:
-                                continue
-                                
-                            param_type = "string"  # Default type
-                            if param.annotation != inspect.Parameter.empty:
-                                if param.annotation == int:
-                                    param_type = "integer"
-                                elif param.annotation == float:
-                                    param_type = "number"
-                                elif param.annotation == bool:
-                                    param_type = "boolean"
-                            
-                            properties[param_name] = {
-                                "type": param_type,
-                                "description": f"Parameter {param_name}"
-                            }
-                            
-                            if param.default == inspect.Parameter.empty:
-                                required.append(param_name)
-                        
-                        tools.append({
-                            "name": tool_name,
-                            "description": tool_func.__doc__ or f"Tool {tool_name}",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": properties,
-                                "required": required
-                            }
-                        })
-                    
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": data.get("id"),
-                        "result": {"tools": tools}
-                    })
-                
-                elif method == "tools/call":
-                    tool_name = data.get("params", {}).get("name")
-                    arguments = data.get("params", {}).get("arguments", {})
-                    
-                    if tool_name in mcp._tools:
-                        try:
-                            result = await mcp._tools[tool_name](**arguments)
-                            return JSONResponse({
-                                "jsonrpc": "2.0",
-                                "id": data.get("id"),
-                                "result": {
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": str(result)
-                                        }
-                                    ]
-                                }
-                            })
-                        except Exception as e:
-                            return JSONResponse({
-                                "jsonrpc": "2.0",
-                                "id": data.get("id"),
-                                "error": {
-                                    "code": -32603,
-                                    "message": f"Tool execution failed: {str(e)}"
-                                }
-                            })
-                    else:
-                        return JSONResponse({
-                            "jsonrpc": "2.0",
-                            "id": data.get("id"),
-                            "error": {
-                                "code": -32601,
-                                "message": f"Tool not found: {tool_name}"
-                            }
-                        })
-                
-                else:
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": data.get("id"),
-                        "error": {
-                            "code": -32601,
-                            "message": f"Method not found: {method}"
-                        }
-                    })
-                    
-            except Exception as e:
-                return JSONResponse({
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {
-                        "code": -32700,
-                        "message": f"Parse error: {str(e)}"
-                    }
-                })
-        
-        # Handle SSE connection for real-time communication
-        return Response(
-            content="event: ping\ndata: Server ready\n\n",
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*"
-            }
-        )
-    
+def create_web_app():
+    """Create Starlette app for health endpoint."""
     async def handle_health(request: Request):
-        return JSONResponse({"status": "healthy", "server": "General MCP Server"})
+        return JSONResponse({
+            "status": "healthy", 
+            "server": "General MCP Server",
+            "version": "1.0.0"
+        })
     
-    return Starlette(
-        routes=[
-            Route("/sse", endpoint=handle_mcp, methods=["GET", "POST"]),
-            Route("/health", endpoint=handle_health),
-        ],
-        debug=True
-    )
+    return Starlette(routes=[
+        Route("/health", handle_health, methods=["GET"]),
+        Route("/", handle_health, methods=["GET"])
+    ])
 
 # ============================================================================
 # DATA FORMATTING UTILITIES
@@ -1778,7 +1862,6 @@ def format_tiktok_video(video_data: Dict[str, Any]) -> Dict[str, Any]:
 # MONITORING & ANALYTICS TOOLS
 # ============================================================================
 
-@mcp.tool()
 async def get_api_usage_stats() -> str:
     """
     Get comprehensive API usage statistics to monitor costs and usage patterns.
@@ -1859,23 +1942,31 @@ async def get_api_usage_stats() -> str:
     
     return stats
 
+async def main():
+    """Main entry point for the MCP server."""
+    # Run the MCP server with SSE transport
+    from mcp.server.sse import SseServerTransport
+    
+    async with SseServerTransport("/sse") as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options()
+        )
+
 if __name__ == "__main__":
-    import argparse
+    import sys
     
-    parser = argparse.ArgumentParser(description="General MCP Server")
-    parser.add_argument("--host", default="localhost", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8080)), help="Port to listen on")
-    parser.add_argument("--stdio", action="store_true", help="Use stdio transport instead of SSE")
-    
-    args = parser.parse_args()
-    
-    if args.stdio:
-        # Run with stdio transport (for local testing)
-        asyncio.run(mcp.run())
+    # For Railway and other cloud deployments, we need an HTTP server for health checks
+    # but the actual MCP communication happens over SSE
+    if len(sys.argv) > 1 and sys.argv[1] == "--http":
+        # Run HTTP server mode for Railway
+        app = create_web_app()
+        port = int(os.environ.get("PORT", 8080))
+        print(f"🚀 HTTP Health Server starting on port {port}")
+        uvicorn.run(app, host="0.0.0.0", port=port)
     else:
-        # Run with SSE transport (for remote access)
-        app = create_sse_app()
-        print(f"🚀 General MCP Server starting on http://{args.host}:{args.port}")
-        print(f"📡 SSE endpoint: http://{args.host}:{args.port}/sse")
-        print(f"🏥 Health check: http://{args.host}:{args.port}/health")
-        uvicorn.run(app, host=args.host, port=args.port)
+        # Run MCP server mode
+        print("🚀 Starting MCP Server with SSE transport")
+        import asyncio
+        asyncio.run(main())
