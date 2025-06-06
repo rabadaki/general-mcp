@@ -80,13 +80,33 @@ rl.on('line', async (line) => {
 
     const result = await response.json();
     
-    // Validate the response structure before sending
+    // Comprehensive response validation and repair
     if (result && typeof result === 'object') {
+      // Ensure all responses have jsonrpc field
       if (!result.jsonrpc) {
         result.jsonrpc = "2.0";
       }
-      if (messageId !== null && messageId !== undefined && !result.id) {
+      
+      // Ensure proper ID handling
+      if (messageId !== null && messageId !== undefined) {
         result.id = messageId;
+      }
+      
+      // Clean up any malformed error responses
+      if (result.error && !result.result) {
+        // This is an error response - ensure it's properly formatted
+        const cleanResponse = {
+          jsonrpc: "2.0",
+          id: messageId,
+          error: result.error
+        };
+        console.log(JSON.stringify(cleanResponse));
+        return;
+      }
+      
+      // For successful responses, ensure they have result field
+      if (!result.error && !result.result) {
+        result.result = {};
       }
     }
     
@@ -103,8 +123,10 @@ rl.on('line', async (line) => {
         }
       };
       console.log(JSON.stringify(errorResponse));
+    } else {
+      // For notifications (no id), add debug info but don't send response
+      process.stderr.write(`Debug: Notification error ignored: ${error.message}\n`);
     }
-    // For notifications (no id), silently ignore errors
   }
 });
 
