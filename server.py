@@ -481,4 +481,5 @@ if __name__ == "__main__":
     print(f"🌊 SSE endpoint: http://0.0.0.0:{port}/sse") 
     print(f"🏥 Health check: http://0.0.0.0:{port}/health")
     print(f"🔥 CACHE BUSTER: {datetime.now().isoformat()}")
+    print("🔥 THIS IS THE NEW FASTAPI CODE - Railway should see this!")
     uvicorn.run(app, host="0.0.0.0", port=port)
