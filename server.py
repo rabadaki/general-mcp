@@ -43,7 +43,6 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.responses import JSONResponse, Response
-from mcp.server.sse import SseServerTransport
 from starlette.requests import Request
 
 # Environment and configuration
@@ -1508,40 +1507,20 @@ Error: {str(e)}
 💡 **Alternative**: Try individual searches for each term using the search_google_trends tool"""
 
 def create_sse_app():
-    """Create a Starlette app with SSE transport for the MCP server."""
+    """Create a Starlette app with FastMCP SSE transport."""
     
-    sse = SseServerTransport("/sse")
+    app = Starlette(debug=True)
     
-    async def handle_sse(request: Request):
-        """Handle SSE connection for MCP."""
-        try:
-            async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-                await mcp.run_sse(*streams)
-        except Exception as e:
-            print(f"SSE connection error: {e}")
-            # Return a proper SSE response even on error
-            return Response(
-                content=f"event: error\ndata: {str(e)}\n\n",
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Headers": "*",
-                    "Access-Control-Allow-Methods": "*"
-                }
-            )
+    # Add FastMCP SSE support
+    mcp.add_sse_endpoint(app, "/sse")
     
     async def handle_health(request: Request):
         return JSONResponse({"status": "healthy", "server": "General MCP Server"})
     
-    return Starlette(
-        routes=[
-            Route("/sse", endpoint=handle_sse, methods=["GET", "POST"]),
-            Route("/health", endpoint=handle_health),
-        ],
-        debug=True
-    )
+    # Add health endpoint
+    app.routes.append(Route("/health", endpoint=handle_health))
+    
+    return app
 
 # ============================================================================
 # DATA FORMATTING UTILITIES
