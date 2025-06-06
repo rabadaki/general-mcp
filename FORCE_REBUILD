@@ -1,0 +1,3 @@
+FORCE REBUILD: 2024-12-19 17:30:00
+This file exists to force Railway to rebuild the application completely.
+The server.py file contains the NEW FastAPI code but Railway keeps running cached old code. 
