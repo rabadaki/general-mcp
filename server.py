@@ -1507,20 +1507,160 @@ Error: {str(e)}
 💡 **Alternative**: Try individual searches for each term using the search_google_trends tool"""
 
 def create_sse_app():
-    """Create a Starlette app with FastMCP SSE transport."""
+    """Create a Starlette app with HTTP MCP transport."""
     
-    app = Starlette(debug=True)
-    
-    # Add FastMCP SSE support
-    mcp.add_sse_endpoint(app, "/sse")
+    async def handle_mcp(request: Request):
+        """Handle MCP requests over HTTP."""
+        if request.method == "POST":
+            try:
+                data = await request.json()
+                method = data.get("method")
+                
+                if method == "initialize":
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": data.get("id"),
+                        "result": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {
+                                "tools": {}
+                            },
+                            "serverInfo": {
+                                "name": "General Search",
+                                "version": "2.0.0"
+                            }
+                        }
+                    })
+                
+                elif method == "tools/list":
+                    # Get all tools from FastMCP
+                    tools = []
+                    for tool_name, tool_func in mcp._tools.items():
+                        # Extract parameter info from function signature
+                        import inspect
+                        sig = inspect.signature(tool_func)
+                        
+                        properties = {}
+                        required = []
+                        
+                        for param_name, param in sig.parameters.items():
+                            if param_name in ['self', 'args', 'kwargs']:
+                                continue
+                                
+                            param_type = "string"  # Default type
+                            if param.annotation != inspect.Parameter.empty:
+                                if param.annotation == int:
+                                    param_type = "integer"
+                                elif param.annotation == float:
+                                    param_type = "number"
+                                elif param.annotation == bool:
+                                    param_type = "boolean"
+                            
+                            properties[param_name] = {
+                                "type": param_type,
+                                "description": f"Parameter {param_name}"
+                            }
+                            
+                            if param.default == inspect.Parameter.empty:
+                                required.append(param_name)
+                        
+                        tools.append({
+                            "name": tool_name,
+                            "description": tool_func.__doc__ or f"Tool {tool_name}",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": properties,
+                                "required": required
+                            }
+                        })
+                    
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": data.get("id"),
+                        "result": {"tools": tools}
+                    })
+                
+                elif method == "tools/call":
+                    tool_name = data.get("params", {}).get("name")
+                    arguments = data.get("params", {}).get("arguments", {})
+                    
+                    if tool_name in mcp._tools:
+                        try:
+                            result = await mcp._tools[tool_name](**arguments)
+                            return JSONResponse({
+                                "jsonrpc": "2.0",
+                                "id": data.get("id"),
+                                "result": {
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": str(result)
+                                        }
+                                    ]
+                                }
+                            })
+                        except Exception as e:
+                            return JSONResponse({
+                                "jsonrpc": "2.0",
+                                "id": data.get("id"),
+                                "error": {
+                                    "code": -32603,
+                                    "message": f"Tool execution failed: {str(e)}"
+                                }
+                            })
+                    else:
+                        return JSONResponse({
+                            "jsonrpc": "2.0",
+                            "id": data.get("id"),
+                            "error": {
+                                "code": -32601,
+                                "message": f"Tool not found: {tool_name}"
+                            }
+                        })
+                
+                else:
+                    return JSONResponse({
+                        "jsonrpc": "2.0",
+                        "id": data.get("id"),
+                        "error": {
+                            "code": -32601,
+                            "message": f"Method not found: {method}"
+                        }
+                    })
+                    
+            except Exception as e:
+                return JSONResponse({
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {
+                        "code": -32700,
+                        "message": f"Parse error: {str(e)}"
+                    }
+                })
+        
+        # Handle SSE connection for real-time communication
+        return Response(
+            content="event: ping\ndata: Server ready\n\n",
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "*"
+            }
+        )
     
     async def handle_health(request: Request):
         return JSONResponse({"status": "healthy", "server": "General MCP Server"})
     
-    # Add health endpoint
-    app.routes.append(Route("/health", endpoint=handle_health))
-    
-    return app
+    return Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_mcp, methods=["GET", "POST"]),
+            Route("/health", endpoint=handle_health),
+        ],
+        debug=True
+    )
 
 # ============================================================================
 # DATA FORMATTING UTILITIES
