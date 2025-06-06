@@ -181,6 +181,123 @@ TOOLS = [
         }
     },
     {
+        "name": "get_subreddit_posts",
+        "description": "Get posts from specific subreddit",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "subreddit": {"type": "string", "description": "Subreddit name"},
+                "sort": {"type": "string", "description": "Sort order (hot, new, rising, top)"},
+                "time": {"type": "string", "description": "Time period (all, year, month, week, day, hour)"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+            },
+            "required": ["subreddit"]
+        }
+    },
+    {
+        "name": "get_reddit_comments",
+        "description": "Get comments from a Reddit post",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "post_url": {"type": "string", "description": "Reddit post URL"},
+                "limit": {"type": "integer", "description": "Number of comments to return (max 50)"}
+            },
+            "required": ["post_url"]
+        }
+    },
+    {
+        "name": "search_youtube",
+        "description": "Search YouTube videos",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search terms"},
+                "published_after": {"type": "string", "description": "ISO date (optional)"},
+                "published_before": {"type": "string", "description": "ISO date (optional)"},
+                "order": {"type": "string", "description": "Sort order (relevance, date, rating, viewCount, title)"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "get_youtube_trending",
+        "description": "Get trending YouTube videos",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Category ID (0=all, 10=music, 15=pets, etc.)"},
+                "region": {"type": "string", "description": "Country code (US, CA, GB, etc.)"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "search_twitter",
+        "description": "Search tweets (cost-protected)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query (Twitter syntax supported)"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"},
+                "sort": {"type": "string", "description": "Sort order (Latest, Popular, Photos, Videos)"},
+                "days_back": {"type": "integer", "description": "Days to search back (max 7)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "get_user_tweets",
+        "description": "Get user timeline (cost-protected)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "Twitter username (without @)"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"},
+                "days_back": {"type": "integer", "description": "Days to search back (max 7)"}
+            },
+            "required": ["username"]
+        }
+    },
+    {
+        "name": "search_tiktok",
+        "description": "Search TikTok videos",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search terms"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "get_tiktok_user_videos",
+        "description": "Get TikTok user videos",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "username": {"type": "string", "description": "TikTok username (without @)"},
+                "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+            },
+            "required": ["username"]
+        }
+    },
+    {
+        "name": "search_perplexity",
+        "description": "AI-powered web search using Perplexity",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "max_results": {"type": "integer", "description": "Number of source results (max 10)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "search_web",
         "description": "Search the web using DuckDuckGo",
         "inputSchema": {
@@ -190,6 +307,32 @@ TOOLS = [
                 "max_results": {"type": "integer", "description": "Number of results to return (max 20)"}
             },
             "required": ["query"]
+        }
+    },
+    {
+        "name": "search_google_trends",
+        "description": "Google Trends analysis",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search term for trends"},
+                "timeframe": {"type": "string", "description": "Time period (today 5-y, today 12-m, etc.)"},
+                "geo": {"type": "string", "description": "Geographic location (US, GB, etc.)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "compare_google_trends",
+        "description": "Compare multiple terms in Google Trends",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "terms": {"type": "array", "items": {"type": "string"}, "description": "List of terms to compare"},
+                "timeframe": {"type": "string", "description": "Time period (today 5-y, today 12-m, etc.)"},
+                "geo": {"type": "string", "description": "Geographic location (US, GB, etc.)"}
+            },
+            "required": ["terms"]
         }
     },
     {
@@ -243,8 +386,30 @@ async def handle_mcp_message(message: dict):
             # Call the appropriate tool function
             if tool_name == "search_reddit":
                 result = await search_reddit(**arguments)
+            elif tool_name == "get_subreddit_posts":
+                result = await get_subreddit_posts(**arguments)
+            elif tool_name == "get_reddit_comments":
+                result = await get_reddit_comments(**arguments)
+            elif tool_name == "search_youtube":
+                result = await search_youtube(**arguments)
+            elif tool_name == "get_youtube_trending":
+                result = await get_youtube_trending(**arguments)
+            elif tool_name == "search_twitter":
+                result = await search_twitter(**arguments)
+            elif tool_name == "get_user_tweets":
+                result = await get_user_tweets(**arguments)
+            elif tool_name == "search_tiktok":
+                result = await search_tiktok(**arguments)
+            elif tool_name == "get_tiktok_user_videos":
+                result = await get_tiktok_user_videos(**arguments)
+            elif tool_name == "search_perplexity":
+                result = await search_perplexity(**arguments)
             elif tool_name == "search_web":
                 result = await search_web(**arguments)
+            elif tool_name == "search_google_trends":
+                result = await search_google_trends(**arguments)
+            elif tool_name == "compare_google_trends":
+                result = await compare_google_trends(**arguments)
             elif tool_name == "get_api_usage_stats":
                 result = await get_api_usage_stats(**arguments)
             else:
@@ -469,6 +634,368 @@ async def get_api_usage_stats() -> str:
 """
     
     return stats
+
+# ============================================================================
+# ADDITIONAL REDDIT TOOLS
+# ============================================================================
+
+async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "day", limit: int = 10) -> str:
+    """Get posts from specific subreddit."""
+    limit = validate_limit(limit, MAX_LIMIT, "Reddit")
+    log_api_usage("Reddit", "subreddit_posts", limit)
+    
+    if not APIFY_TOKEN:
+        return "❌ APIFY_TOKEN not configured"
+    
+    payload = {
+        "subreddits": [subreddit],
+        "sort": sort,
+        "time": time,
+        "maxItems": limit
+    }
+    
+    data = await make_request(f"{APIFY_API_BASE}/trudax~reddit-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    
+    if not data:
+        return f"❌ Failed to fetch posts from r/{subreddit}"
+    
+    results = []
+    for post in data[:limit]:
+        title = post.get("title", "No title")[:100]
+        author = post.get("author", "Unknown")
+        score = post.get("score", 0)
+        comments = post.get("numberOfComments", 0)
+        url = post.get("url", "")
+        
+        results.append(f"🔸 **{title}**\n👤 u/{author} | ⬆️ {score} | 💬 {comments}\n🔗 {url}")
+    
+    header = f"📋 Found {len(results)} posts from r/{subreddit}"
+    return header + "\n\n" + "\n---\n".join(results)
+
+async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
+    """Get comments from a Reddit post."""
+    limit = validate_limit(limit, MAX_LIMIT, "Reddit")
+    log_api_usage("Reddit", "comments", limit)
+    
+    if not APIFY_TOKEN:
+        return "❌ APIFY_TOKEN not configured"
+    
+    payload = {
+        "startUrls": [post_url],
+        "maxComments": limit
+    }
+    
+    data = await make_request(f"{APIFY_API_BASE}/trudax~reddit-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    
+    if not data:
+        return f"❌ Failed to fetch comments"
+    
+    results = []
+    for comment in data[:limit]:
+        if comment.get("type") == "comment":
+            author = comment.get("author", "Unknown")
+            text = comment.get("text", "")[:200]
+            score = comment.get("score", 0)
+            results.append(f"💬 **u/{author}** (⬆️ {score})\n{text}")
+    
+    header = f"💬 Found {len(results)} comments"
+    return header + "\n\n" + "\n---\n".join(results)
+
+# ============================================================================
+# YOUTUBE TOOLS
+# ============================================================================
+
+async def search_youtube(query: str, published_after: str = "", published_before: str = "", order: str = "viewCount", limit: int = 10) -> str:
+    """Search YouTube videos."""
+    limit = validate_limit(limit, MAX_LIMIT, "YouTube")
+    log_api_usage("YouTube", "search", limit)
+    
+    if not YOUTUBE_API_KEY:
+        return "❌ YouTube API not configured"
+    
+    params = {
+        "part": "snippet",
+        "q": query,
+        "type": "video",
+        "order": order,
+        "maxResults": limit,
+        "key": YOUTUBE_API_KEY
+    }
+    
+    if published_after:
+        params["publishedAfter"] = published_after
+    if published_before:
+        params["publishedBefore"] = published_before
+    
+    data = await make_request(f"{YOUTUBE_API_BASE}/search", params)
+    
+    if not data or "items" not in data:
+        return f"❌ YouTube search failed for '{query}'"
+    
+    results = []
+    for video in data["items"]:
+        snippet = video["snippet"]
+        title = snippet.get("title", "No title")
+        channel = snippet.get("channelTitle", "Unknown")
+        description = snippet.get("description", "")[:150]
+        video_id = video["id"]["videoId"]
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        results.append(f"🎥 **{title}**\n📺 {channel}\n📝 {description}...\n🔗 {video_url}")
+    
+    header = f"🔍 Found {len(results)} YouTube videos for '{query}'"
+    return header + "\n\n" + "\n---\n".join(results)
+
+async def get_youtube_trending(category: str = "0", region: str = "US", limit: int = 10) -> str:
+    """Get trending YouTube videos."""
+    limit = validate_limit(limit, MAX_LIMIT, "YouTube")
+    log_api_usage("YouTube", "trending", limit)
+    
+    if not YOUTUBE_API_KEY:
+        return "❌ YouTube API not configured"
+    
+    params = {
+        "part": "snippet,statistics",
+        "chart": "mostPopular",
+        "regionCode": region,
+        "videoCategoryId": category,
+        "maxResults": limit,
+        "key": YOUTUBE_API_KEY
+    }
+    
+    data = await make_request(f"{YOUTUBE_API_BASE}/videos", params)
+    
+    if not data or "items" not in data:
+        return f"❌ Failed to get trending videos"
+    
+    results = []
+    for video in data["items"]:
+        snippet = video["snippet"]
+        stats = video.get("statistics", {})
+        
+        title = snippet.get("title", "No title")
+        channel = snippet.get("channelTitle", "Unknown")
+        views = stats.get("viewCount", "0")
+        likes = stats.get("likeCount", "0")
+        video_id = video["id"]
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        results.append(f"🔥 **{title}**\n📺 {channel}\n👁️ {views} views | 👍 {likes}\n🔗 {video_url}")
+    
+    header = f"📈 Found {len(results)} trending videos"
+    return header + "\n\n" + "\n---\n".join(results)
+
+# ============================================================================
+# TWITTER TOOLS
+# ============================================================================
+
+async def search_twitter(query: str, limit: int = 15, sort: str = "Latest", days_back: int = 7) -> str:
+    """Search tweets with cost protection."""
+    limit = validate_limit(limit, MAX_LIMIT, "Twitter")
+    log_api_usage("Twitter", "search", limit, cost_estimate=0.02)
+    
+    if not APIFY_TOKEN:
+        return "❌ APIFY_TOKEN not configured"
+    
+    payload = {
+        "searchTerms": [query],
+        "sort": sort,
+        "maxItems": limit,
+        "tweetLanguage": "en"
+    }
+    
+    data = await make_request(f"{APIFY_API_BASE}/61RPP7dywgiy0JPD0/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    
+    if not data:
+        return f"❌ Twitter search failed for '{query}'"
+    
+    results = []
+    for tweet in data[:limit]:
+        author = tweet.get("author", {}).get("userName", "Unknown")
+        text = tweet.get("text", "")[:200]
+        likes = tweet.get("likeCount", 0)
+        retweets = tweet.get("retweetCount", 0)
+        url = tweet.get("url", "")
+        
+        results.append(f"🐦 **@{author}**\n📝 {text}\n❤️ {likes} | 🔄 {retweets}\n🔗 {url}")
+    
+    header = f"🔍 Found {len(results)} tweets for '{query}'"
+    return header + "\n\n" + "\n---\n".join(results)
+
+async def get_user_tweets(username: str, limit: int = 15, days_back: int = 7) -> str:
+    """Get user timeline with cost protection."""
+    limit = validate_limit(limit, MAX_LIMIT, "Twitter")
+    log_api_usage("Twitter", "user_tweets", limit, cost_estimate=0.02)
+    
+    if not APIFY_TOKEN:
+        return "❌ APIFY_TOKEN not configured"
+    
+    payload = {
+        "handles": [username],
+        "maxItems": limit,
+        "tweetLanguage": "en"
+    }
+    
+    data = await make_request(f"{APIFY_API_BASE}/61RPP7dywgiy0JPD0/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    
+    if not data:
+        return f"❌ Failed to get tweets from @{username}"
+    
+    results = []
+    for tweet in data[:limit]:
+        text = tweet.get("text", "")[:200]
+        likes = tweet.get("likeCount", 0)
+        retweets = tweet.get("retweetCount", 0)
+        created_at = tweet.get("createdAt", "")[:10]
+        url = tweet.get("url", "")
+        
+        results.append(f"📅 {created_at}\n📝 {text}\n❤️ {likes} | 🔄 {retweets}\n🔗 {url}")
+    
+    header = f"📱 Found {len(results)} tweets from @{username}"
+    return header + "\n\n" + "\n---\n".join(results)
+
+# ============================================================================
+# TIKTOK TOOLS
+# ============================================================================
+
+async def search_tiktok(query: str, limit: int = 10) -> str:
+    """Search TikTok videos."""
+    limit = validate_limit(limit, MAX_LIMIT, "TikTok")
+    log_api_usage("TikTok", "search", limit)
+    
+    if not APIFY_TOKEN:
+        return "❌ APIFY_TOKEN not configured"
+    
+    payload = {
+        "searchQueries": [query],
+        "resultsPerQuery": limit
+    }
+    
+    data = await make_request(f"{APIFY_API_BASE}/clockworks~free-tiktok-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    
+    if not data:
+        return f"❌ TikTok search failed for '{query}'"
+    
+    results = []
+    for video in data[:limit]:
+        author = video.get("authorMeta", {}).get("name", "Unknown")
+        text = video.get("text", "")[:150]
+        likes = video.get("diggCount", 0)
+        views = video.get("playCount", 0)
+        url = video.get("webVideoUrl", "")
+        
+        results.append(f"🎵 **@{author}**\n📝 {text}\n👁️ {views:,} views | ❤️ {likes:,}\n🔗 {url}")
+    
+    header = f"🔍 Found {len(results)} TikTok videos for '{query}'"
+    return header + "\n\n" + "\n---\n".join(results)
+
+async def get_tiktok_user_videos(username: str, limit: int = 10) -> str:
+    """Get TikTok user videos."""
+    limit = validate_limit(limit, MAX_LIMIT, "TikTok")
+    log_api_usage("TikTok", "user_videos", limit)
+    
+    if not APIFY_TOKEN:
+        return "❌ APIFY_TOKEN not configured"
+    
+    payload = {
+        "profiles": [f"https://www.tiktok.com/@{username}"],
+        "resultsPerQuery": limit
+    }
+    
+    data = await make_request(f"{APIFY_API_BASE}/clockworks~free-tiktok-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST")
+    
+    if not data:
+        return f"❌ Failed to get videos from @{username}"
+    
+    results = []
+    for video in data[:limit]:
+        text = video.get("text", "")[:150]
+        likes = video.get("diggCount", 0)
+        views = video.get("playCount", 0)
+        created_at = video.get("createTime", "")[:10]
+        url = video.get("webVideoUrl", "")
+        
+        results.append(f"📅 {created_at}\n📝 {text}\n👁️ {views:,} views | ❤️ {likes:,}\n🔗 {url}")
+    
+    header = f"📱 Found {len(results)} videos from @{username}"
+    return header + "\n\n" + "\n---\n".join(results)
+
+# ============================================================================
+# PERPLEXITY & GOOGLE TRENDS TOOLS
+# ============================================================================
+
+async def search_perplexity(query: str, max_results: int = 10) -> str:
+    """AI-powered web search using Perplexity."""
+    max_results = validate_limit(max_results, 10, "Perplexity")
+    log_api_usage("Perplexity", "search", max_results)
+    
+    if not PERPLEXITY_API_KEY:
+        return "❌ Perplexity API not configured"
+    
+    headers = {
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.1-sonar-small-128k-online",
+        "messages": [
+            {"role": "system", "content": "Be precise and informative. Provide factual information with sources."},
+            {"role": "user", "content": query}
+        ],
+        "max_tokens": 1000,
+        "temperature": 0.2,
+        "return_citations": True
+    }
+    
+    data = await make_request(PERPLEXITY_API_BASE, headers=headers, method="POST", json_data=payload)
+    
+    if not data or "choices" not in data:
+        return f"❌ Perplexity search failed for '{query}'"
+    
+    content = data["choices"][0]["message"]["content"]
+    citations = data.get("citations", [])
+    
+    result = f"🧠 **Perplexity AI Search Results for '{query}'**\n\n{content}"
+    
+    if citations:
+        result += "\n\n**Sources:**\n"
+        for i, citation in enumerate(citations[:max_results], 1):
+            result += f"{i}. {citation}\n"
+    
+    return result
+
+async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: str = "US") -> str:
+    """Google Trends analysis."""
+    log_api_usage("GoogleTrends", "search", 1)
+    
+    manual_url = f"https://trends.google.com/trends/explore?q={query}&geo={geo}&date={timeframe}"
+    
+    result = f"📈 **Google Trends Analysis for '{query}'**\n\n"
+    result += f"🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
+    result += "⚠️ **Manual Access Required**\n"
+    result += "Google Trends blocks automated requests. Please visit:\n"
+    result += f"🔗 {manual_url}\n\n"
+    result += "💡 **What you'll find:**\n"
+    result += "• Interest over time graphs\n• Related topics and queries\n• Regional interest breakdown\n• Rising and top searches"
+    
+    return result
+
+async def compare_google_trends(terms: list, timeframe: str = "today 12-m", geo: str = "US") -> str:
+    """Compare multiple terms in Google Trends."""
+    log_api_usage("GoogleTrends", "compare", len(terms))
+    
+    query_string = ",".join(terms)
+    manual_url = f"https://trends.google.com/trends/explore?q={query_string}&geo={geo}&date={timeframe}"
+    
+    result = f"📊 **Google Trends Comparison**\n\n"
+    result += f"🔍 Terms: {', '.join(terms)}\n🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
+    result += "⚠️ **Manual Access Required**\n"
+    result += "Google Trends blocks automated requests. Please visit:\n"
+    result += f"🔗 {manual_url}\n\n"
+    result += "💡 **What you'll find:**\n"
+    result += "• Side-by-side comparison graphs\n• Interest distribution over time\n• Regional performance differences\n• Related topics for each term"
+    
+    return result
 
 # ============================================================================
 # MAIN APPLICATION
