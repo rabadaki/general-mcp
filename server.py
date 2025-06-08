@@ -704,7 +704,6 @@ async def get_api_usage_stats() -> str:
 async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "day", limit: int = 10) -> str:
     """Get posts from specific subreddit using free Reddit API."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
-    log_api_usage("Reddit", "subreddit_posts", limit, 0, 0.0)  # Free API
     
     # Map sort options to Reddit API format
     sort_mapping = {
@@ -751,13 +750,13 @@ async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "da
         result += f"\n🔗 {url}"
         results.append(result)
     
+    log_api_usage("Reddit", "subreddit_posts", limit, len(results), 0.0)  # Free API
     header = f"📋 Found {len(results)} posts from r/{subreddit} (sorted by {sort})"
     return header + "\n\n" + "\n---\n".join(results)
 
 async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
     """Get comments from a Reddit post using free Reddit API."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
-    log_api_usage("Reddit", "comments", limit, 0, 0.0)  # Free API
     
     # Convert Reddit URL to JSON API URL
     if not post_url.startswith("https://"):
@@ -808,8 +807,10 @@ async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
         results.append(f"💬 **u/{author}** (⬆️ {score})\n{body}")
     
     if not results:
+        log_api_usage("Reddit", "comments", limit, 0, 0.0)  # Free API
         return f"❌ No readable comments found for this post."
     
+    log_api_usage("Reddit", "comments", limit, len(results), 0.0)  # Free API
     header = f"💬 Comments from: **{post_title}** ({len(results)} comments)"
     return header + "\n\n" + "\n---\n".join(results)
 
@@ -1077,147 +1078,124 @@ async def search_perplexity(query: str, max_results: int = 10) -> str:
     return result
 
 async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: str = "US") -> str:
-    """Google Trends analysis using ScrapingBee."""
-    log_api_usage("GoogleTrends", "search", 1, 0, 0.05)
-    
-    if not SCRAPINGBEE_API_KEY:
-        return "❌ SCRAPINGBEE_API_KEY not configured"
-    
-    import urllib.parse
-    
-    # Construct Google Trends URL
-    encoded_query = urllib.parse.quote(query)
-    trends_url = f"https://trends.google.com/trends/explore?q={encoded_query}&geo={geo}&date={urllib.parse.quote(timeframe)}"
-    
-    # ScrapingBee parameters
-    params = {
-        'api_key': SCRAPINGBEE_API_KEY,
-        'url': trends_url,
-        'render_js': 'true',
-        'wait': '3000',
-        'country_code': 'us',
-        'custom_google': 'true',
-        'block_resources': 'false'
-    }
+    """Google Trends analysis using pytrends library."""
     
     try:
-        # Use requests for ScrapingBee (different from our async httpx)
-        import requests
-        response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
+        from pytrends.request import TrendReq
         
-        if response.status_code == 200:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(response.content, 'html.parser')
+        # Initialize pytrends
+        pytrends = TrendReq(hl='en-US', tz=360)
+        
+        # Build the payload
+        pytrends.build_payload([query], cat=0, timeframe=timeframe, geo=geo, gprop='')
+        
+        # Get interest over time
+        interest_over_time = pytrends.interest_over_time()
+        
+        # Get related queries
+        related_queries = pytrends.related_queries()
+        
+        # Get related topics  
+        related_topics = pytrends.related_topics()
+        
+        results = []
+        results.append(f"📈 **Google Trends Analysis for '{query}'**")
+        results.append(f"🌍 Region: {geo} | 📅 Timeframe: {timeframe}")
+        
+        if not interest_over_time.empty:
+            # Get trend statistics
+            avg_interest = interest_over_time[query].mean()
+            max_interest = interest_over_time[query].max()
+            latest_interest = interest_over_time[query].iloc[-1]
             
-            # Extract trends data
-            page_text = soup.get_text()
-            
-            # Look for related queries and topics
-            trend_sections = []
-            
-            # Check if we got the trends page
-            if 'trending' in page_text.lower() or 'related' in page_text.lower():
-                trend_sections.append("✅ Successfully accessed Google Trends data")
-                
-                # Try to find related queries
-                related_elements = soup.find_all(text=lambda text: text and 'related' in text.lower())
-                if related_elements:
-                    trend_sections.append(f"🔍 Found {len(related_elements)} related sections")
-                
-            else:
-                trend_sections.append("⚠️ Limited data available - Google may be blocking automated access")
-            
-            result = f"📈 **Google Trends Analysis for '{query}'**\n\n"
-            result += f"🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
-            result += "\n".join(trend_sections)
-            result += f"\n\n🔗 Manual access: {trends_url}"
-            
-            return result
-            
-        elif response.status_code == 500:
-            # Try with premium proxy
-            params['premium_proxy'] = 'true'
-            response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
-            
-            if response.status_code == 200:
-                result = f"📈 **Google Trends Analysis for '{query}'**\n\n"
-                result += f"🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
-                result += "✅ Data retrieved with premium proxy\n"
-                result += f"🔗 Manual access: {trends_url}"
-                return result
-            else:
-                return f"❌ ScrapingBee failed even with premium proxy: {response.status_code}"
-        else:
-            return f"❌ ScrapingBee request failed: {response.status_code} - {response.text[:200]}"
-            
+            results.append(f"\n📊 **Interest Statistics:**")
+            results.append(f"• Average Interest: {avg_interest:.1f}")
+            results.append(f"• Peak Interest: {max_interest}")
+            results.append(f"• Latest Interest: {latest_interest}")
+        
+        # Add related queries
+        if related_queries and query in related_queries and related_queries[query]['top'] is not None:
+            top_queries = related_queries[query]['top'].head(5)
+            results.append(f"\n🔍 **Top Related Queries:**")
+            for idx, row in top_queries.iterrows():
+                results.append(f"• {row['query']} ({row['value']})")
+        
+        # Add related topics  
+        if related_topics and query in related_topics and related_topics[query]['top'] is not None:
+            top_topics = related_topics[query]['top'].head(3)
+            results.append(f"\n📝 **Top Related Topics:**")
+            for idx, row in top_topics.iterrows():
+                results.append(f"• {row['topic_title']} ({row['value']})")
+        
+        log_api_usage("GoogleTrends", "search", 1, 1, 0.0)  # Free API
+        return "\n".join(results)
+        
+    except ImportError:
+        log_api_usage("GoogleTrends", "search", 1, 0, 0.0)
+        return "❌ pytrends library not available. Install with: pip install pytrends"
+        
     except Exception as e:
-        return f"❌ Error accessing Google Trends: {str(e)}"
+        log_api_usage("GoogleTrends", "search", 1, 0, 0.0)
+        return f"❌ Google Trends analysis failed: {str(e)}"
 
 async def compare_google_trends(terms: list, timeframe: str = "today 12-m", geo: str = "US") -> str:
-    """Compare multiple terms in Google Trends using ScrapingBee."""
-    log_api_usage("GoogleTrends", "compare", len(terms), 0, 0.05)
-    
-    if not SCRAPINGBEE_API_KEY:
-        return "❌ SCRAPINGBEE_API_KEY not configured"
-    
-    import urllib.parse
-    
-    # Construct comparison URL
-    query_string = ",".join(terms)
-    encoded_query = urllib.parse.quote(query_string)
-    trends_url = f"https://trends.google.com/trends/explore?q={encoded_query}&geo={geo}&date={urllib.parse.quote(timeframe)}"
-    
-    # ScrapingBee parameters
-    params = {
-        'api_key': SCRAPINGBEE_API_KEY,
-        'url': trends_url,
-        'render_js': 'true',
-        'wait': '3000',
-        'country_code': 'us',
-        'custom_google': 'true',
-        'block_resources': 'false'
-    }
+    """Compare multiple terms in Google Trends using pytrends library."""
     
     try:
-        import requests
-        response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
+        from pytrends.request import TrendReq
         
-        if response.status_code == 200:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(response.content, 'html.parser')
+        # Initialize pytrends
+        pytrends = TrendReq(hl='en-US', tz=360)
+        
+        # Build the payload with multiple terms
+        pytrends.build_payload(terms, cat=0, timeframe=timeframe, geo=geo, gprop='')
+        
+        # Get interest over time for comparison
+        interest_over_time = pytrends.interest_over_time()
+        
+        results = []
+        results.append(f"📊 **Google Trends Comparison**")
+        results.append(f"🔍 Terms: {', '.join(terms)}")
+        results.append(f"🌍 Region: {geo} | 📅 Timeframe: {timeframe}")
+        
+        if not interest_over_time.empty:
+            results.append(f"\n📈 **Comparison Results:**")
             
-            page_text = soup.get_text()
+            # Calculate stats for each term
+            for term in terms:
+                if term in interest_over_time.columns:
+                    avg_interest = interest_over_time[term].mean()
+                    max_interest = interest_over_time[term].max()
+                    latest_interest = interest_over_time[term].iloc[-1]
+                    
+                    results.append(f"• **{term}**: Avg {avg_interest:.1f} | Peak {max_interest} | Latest {latest_interest}")
             
-            result = f"📊 **Google Trends Comparison**\n\n"
-            result += f"🔍 Terms: {', '.join(terms)}\n🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
-            
-            if 'compare' in page_text.lower() or len(terms) > 1:
-                result += "✅ Successfully accessed comparison data\n"
-                result += f"📈 Comparing {len(terms)} terms side-by-side\n"
-            else:
-                result += "⚠️ Limited comparison data available\n"
-                
-            result += f"\n🔗 Manual access: {trends_url}"
-            return result
-            
-        elif response.status_code == 500:
-            # Try with premium proxy
-            params['premium_proxy'] = 'true'
-            response = requests.get('https://app.scrapingbee.com/api/v1/', params=params, timeout=30)
-            
-            if response.status_code == 200:
-                result = f"📊 **Google Trends Comparison**\n\n"
-                result += f"🔍 Terms: {', '.join(terms)}\n🌍 Region: {geo}\n📅 Timeframe: {timeframe}\n\n"
-                result += "✅ Data retrieved with premium proxy\n"
-                result += f"🔗 Manual access: {trends_url}"
-                return result
-            else:
-                return f"❌ ScrapingBee comparison failed: {response.status_code}"
-        else:
-            return f"❌ ScrapingBee request failed: {response.status_code}"
-            
+            # Find the winner
+            if len(terms) > 1:
+                latest_values = {term: interest_over_time[term].iloc[-1] for term in terms if term in interest_over_time.columns}
+                if latest_values:
+                    winner = max(latest_values, key=latest_values.get)
+                    winner_score = latest_values[winner]
+                    results.append(f"\n🏆 **Currently Leading**: {winner} ({winner_score})")
+        
+        # Get related queries for the first term
+        related_queries = pytrends.related_queries()
+        if related_queries and terms[0] in related_queries and related_queries[terms[0]]['top'] is not None:
+            top_queries = related_queries[terms[0]]['top'].head(3)
+            results.append(f"\n🔍 **Related to '{terms[0]}':**")
+            for idx, row in top_queries.iterrows():
+                results.append(f"• {row['query']} ({row['value']})")
+        
+        log_api_usage("GoogleTrends", "compare", len(terms), 1, 0.0)  # Free API
+        return "\n".join(results)
+        
+    except ImportError:
+        log_api_usage("GoogleTrends", "compare", len(terms), 0, 0.0)
+        return "❌ pytrends library not available. Install with: pip install pytrends"
+        
     except Exception as e:
-        return f"❌ Error comparing trends: {str(e)}"
+        log_api_usage("GoogleTrends", "compare", len(terms), 0, 0.0)
+        return f"❌ Google Trends comparison failed: {str(e)}"
 
 # ============================================================================
 # MAIN APPLICATION

@@ -1,11 +1,8 @@
 {
   "mcpServers": {
-    "general-search": {
-      "command": "npx",
-      "args": [
-        "@modelcontextprotocol/server-sse",
-        "https://general-mcp-production.up.railway.app/sse"
-      ]
+    "general-mcp": {
+      "command": "/Users/Amos/general-mcp/mcp_env/bin/python",
+      "args": ["/Users/Amos/general-mcp/mcp_stdio_server.py"]
     }
   }
 } 
