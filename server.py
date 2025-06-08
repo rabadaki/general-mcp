@@ -365,7 +365,7 @@ async def handle_mcp_message(message: dict):
         # If this is a notification (no ID), don't send a response
         if message_id is None:
             print(f"INFO:__main__:Notification received for {method}, not sending response")
-            return Response(content="", status_code=204, media_type="application/json")
+            return {"__notification__": True}
         
         if method == "initialize":
             return {
@@ -477,7 +477,7 @@ async def handle_mcp_message(message: dict):
         msg_id = message.get("id")
         # Don't respond to notifications even on error
         if msg_id is None:
-            return Response(content="", status_code=204, media_type="application/json")
+            return {"__notification__": True}
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
