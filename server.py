@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # MCP and web framework
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -365,7 +365,6 @@ async def handle_mcp_message(message: dict):
         # If this is a notification (no ID), don't send a response
         if message_id is None:
             print(f"INFO:__main__:Notification received for {method}, not sending response")
-            from fastapi import Response
             return Response(status_code=204)
         
         if method == "initialize":
@@ -478,7 +477,6 @@ async def handle_mcp_message(message: dict):
         msg_id = message.get("id")
         # Don't respond to notifications even on error
         if msg_id is None:
-            from fastapi import Response
             return Response(status_code=204)
         return {
             "jsonrpc": "2.0",
