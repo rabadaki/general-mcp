@@ -365,7 +365,8 @@ async def handle_mcp_message(message: dict):
         # If this is a notification (no ID), don't send a response
         if message_id is None:
             print(f"INFO:__main__:Notification received for {method}, not sending response")
-            return None
+            from fastapi import Response
+            return Response(status_code=204)
         
         if method == "initialize":
             return {
@@ -477,7 +478,8 @@ async def handle_mcp_message(message: dict):
         msg_id = message.get("id")
         # Don't respond to notifications even on error
         if msg_id is None:
-            return None
+            from fastapi import Response
+            return Response(status_code=204)
         return {
             "jsonrpc": "2.0",
             "id": msg_id,

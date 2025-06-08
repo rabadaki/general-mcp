@@ -78,6 +78,12 @@ rl.on('line', async (line) => {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
+    // Handle notifications (204 No Content) - don't send any response
+    if (response.status === 204) {
+      process.stderr.write(`Debug: Notification handled, no response sent\n`);
+      return;
+    }
+    
     const result = await response.json();
     
     // Comprehensive response validation and repair
