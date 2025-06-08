@@ -358,11 +358,19 @@ async def handle_mcp_message(message: dict):
     """Handle MCP protocol messages over HTTP."""
     try:
         method = message.get("method")
+        message_id = message.get("id")  # Don't default to 0 - keep None if not provided
+        
+        print(f"INFO:__main__:Handling method: {method} (id: {message_id})")
+        
+        # If this is a notification (no ID), don't send a response
+        if message_id is None:
+            print(f"INFO:__main__:Notification received for {method}, not sending response")
+            return None
         
         if method == "initialize":
             return {
                 "jsonrpc": "2.0",
-                "id": message.get("id"),
+                "id": message_id,
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
@@ -378,13 +386,29 @@ async def handle_mcp_message(message: dict):
         elif method == "tools/list":
             return {
                 "jsonrpc": "2.0",
-                "id": message.get("id"),
+                "id": message_id,
                 "result": {"tools": TOOLS}
+            }
+        
+        elif method == "resources/list":
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "result": {"resources": []}
+            }
+        
+        elif method == "prompts/list":
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "result": {"prompts": []}
             }
         
         elif method == "tools/call":
             tool_name = message.get("params", {}).get("name")
             arguments = message.get("params", {}).get("arguments", {})
+            
+            print(f"INFO:__main__:Calling tool: {tool_name} with args: {arguments}")
             
             # Call the appropriate tool function
             if tool_name == "search_reddit":
@@ -416,11 +440,18 @@ async def handle_mcp_message(message: dict):
             elif tool_name == "get_api_usage_stats":
                 result = await get_api_usage_stats(**arguments)
             else:
-                raise HTTPException(status_code=400, detail=f"Unknown tool: {tool_name}")
+                return {
+                    "jsonrpc": "2.0",
+                    "id": message_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Unknown tool: {tool_name}"
+                    }
+                }
             
             return {
                 "jsonrpc": "2.0",
-                "id": message.get("id"),
+                "id": message_id,
                 "result": {
                     "content": [
                         {
@@ -432,12 +463,24 @@ async def handle_mcp_message(message: dict):
             }
         
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown method: {method}")
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Unknown method: {method}"
+                }
+            }
             
     except Exception as e:
+        print(f"ERROR:__main__:Error handling message: {e}")
+        msg_id = message.get("id")
+        # Don't respond to notifications even on error
+        if msg_id is None:
+            return None
         return {
             "jsonrpc": "2.0",
-            "id": message.get("id"),
+            "id": msg_id,
             "error": {
                 "code": -32603,
                 "message": f"Internal error: {str(e)}"
@@ -517,9 +560,8 @@ async def search_reddit(
     
     data = await make_request(search_url, params=params, headers=headers)
     
-    log_api_usage("Reddit", "search", limit, 0, 0.0)  # Free API
-    
     if not data or not data.get("data") or not data["data"].get("children"):
+        log_api_usage("Reddit", "search", limit, 0, 0.0)  # Free API
         return f"❌ No results found for Reddit search: '{query}'"
     
     results = []
@@ -546,6 +588,7 @@ async def search_reddit(
         result += f"\n🔗 {url}"
         results.append(result)
     
+    log_api_usage("Reddit", "search", limit, len(results), 0.0)  # Free API
     header = f"🔍 Reddit search results for '{query}' ({len(results)} found)"
     return header + "\n\n" + "\n---\n".join(results)
 
