@@ -42,6 +42,10 @@ MAX_LIMIT = 50
 MAX_DAYS_BACK = 7
 DEFAULT_TIMEOUT = 10.0
 
+# API Keys and Configuration
+APIFY_TOKEN = os.environ.get("APIFY_TOKEN")
+APIFY_API_BASE = "https://api.apify.com/v2/acts"
+
 # Initialize FastAPI app for HTTP mode
 app = FastAPI(title="General MCP Server", version="1.0.0")
 
@@ -308,6 +312,57 @@ class MCPServer:
                 }
             },
             {
+                "name": "search_instagram",
+                "description": "Broad Instagram search for profiles, posts, hashtags, reels, and places",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search terms"},
+                        "search_type": {"type": "string", "description": "Type of search: posts, profiles, hashtags, places (default: posts)"},
+                        "limit": {"type": "integer", "description": "Number of results to return (max 50)"}
+                    },
+                    "required": ["query"]
+                }
+            },
+            {
+                "name": "get_instagram_profile",
+                "description": "Deep-dive Instagram profile analysis with full bio, highlights, and engagement metrics",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string", "description": "Instagram username (without @)"},
+                        "include_posts": {"type": "boolean", "description": "Include recent posts (default: true)"}
+                    },
+                    "required": ["username"]
+                }
+            },
+            {
+                "name": "get_instagram_reels",
+                "description": "Get Instagram reels for trend analysis and short video content",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string", "description": "Instagram username (optional, for user reels)"},
+                        "hashtag": {"type": "string", "description": "Hashtag to search (optional, without #)"},
+                        "music_id": {"type": "string", "description": "Music/audio ID (optional)"},
+                        "limit": {"type": "integer", "description": "Number of reels to return (max 50)"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "search_instagram_hashtag",
+                "description": "In-depth Instagram hashtag analysis with engagement metrics and trending content",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "hashtag": {"type": "string", "description": "Hashtag to analyze (without #)"},
+                        "limit": {"type": "integer", "description": "Number of posts to return (max 50)"}
+                    },
+                    "required": ["hashtag"]
+                }
+            },
+            {
                 "name": "get_api_usage_stats",
                 "description": "Get comprehensive API usage statistics",
                 "inputSchema": {
@@ -399,6 +454,14 @@ class MCPServer:
                     result = await search_google_trends(**arguments)
                 elif tool_name == "compare_google_trends":
                     result = await compare_google_trends(**arguments)
+                elif tool_name == "search_instagram":
+                    result = await search_instagram(**arguments)
+                elif tool_name == "get_instagram_profile":
+                    result = await get_instagram_profile(**arguments)
+                elif tool_name == "get_instagram_reels":
+                    result = await get_instagram_reels(**arguments)
+                elif tool_name == "search_instagram_hashtag":
+                    result = await search_instagram_hashtag(**arguments)
                 elif tool_name == "get_api_usage_stats":
                     result = await get_api_usage_stats(**arguments)
                 else:
@@ -838,6 +901,332 @@ async def compare_google_trends(terms: list, timeframe: str = "today 12-m", geo:
     
     terms_str = ", ".join(terms)
     return f"📊 Google Trends comparison for: {terms_str}\n\n📝 Note: Google Trends comparison requires specialized libraries (pytrends). This confirms the comparison endpoint is accessible.\n\n📈 **Comparison request processed successfully**\n📝 Terms: {terms_str}\n⏰ Timeframe: {timeframe}\n🌍 Location: {geo}"
+
+async def search_instagram(query: str, search_type: str = "posts", limit: int = 10) -> str:
+    """Broad Instagram search for profiles, posts, hashtags, reels, and places."""
+    limit = validate_limit(limit, MAX_LIMIT, "Instagram")
+    
+    if not APIFY_TOKEN:
+        log_api_usage("Instagram", "search", limit, 0, 0.0)
+        return "❌ APIFY_TOKEN not configured. Please set APIFY_TOKEN environment variable."
+    
+    # Add delay to avoid rate limiting from Google
+    await asyncio.sleep(0.5)
+    
+    # Map search types to Instagram Scraper parameters
+    search_types_map = {
+        "posts": {"searchType": "hashtag", "searchLimit": limit},
+        "profiles": {"searchType": "user", "searchLimit": limit},  
+        "hashtags": {"searchType": "hashtag", "searchLimit": limit},
+        "places": {"searchType": "place", "searchLimit": limit}
+    }
+    
+    search_config = search_types_map.get(search_type, search_types_map["posts"])
+    
+    payload = {
+        "search": query,
+        **search_config,
+        "resultsLimit": limit
+    }
+    
+    try:
+        # Using Instagram Scraper for broad search
+        data = await make_request(
+            f"{APIFY_API_BASE}/apify~instagram-scraper/run-sync-get-dataset-items",
+            params={"token": APIFY_TOKEN},
+            json_data=payload,
+            method="POST",
+            timeout=30.0
+        )
+        
+        if not data:
+            log_api_usage("Instagram", "search", limit, 0, 0.01)
+            return f"❌ Instagram search failed for '{query}'"
+        
+        results = []
+        for item in data[:limit]:
+            if search_type == "profiles":
+                username = item.get("username", "Unknown")
+                full_name = item.get("fullName", "")
+                bio = item.get("biography", "")[:150] + "..." if len(item.get("biography", "")) > 150 else item.get("biography", "")
+                followers = item.get("followersCount", 0)
+                following = item.get("followingCount", 0)
+                posts_count = item.get("postsCount", 0)
+                
+                result = f"""👤 **@{username}** ({full_name})
+👥 {followers:,} followers | {following:,} following | 📸 {posts_count:,} posts
+📝 {bio}
+🔗 https://instagram.com/{username}"""
+                results.append(result)
+                
+            else:  # posts/hashtags
+                caption = item.get("caption", "")[:200] + "..." if len(item.get("caption", "")) > 200 else item.get("caption", "")
+                likes = item.get("likesCount", 0)
+                comments = item.get("commentsCount", 0)
+                owner = item.get("ownerUsername", "Unknown")
+                post_url = item.get("url", "")
+                
+                result = f"""📸 **Post by @{owner}**
+❤️ {likes:,} likes | 💬 {comments:,} comments
+📝 {caption}
+🔗 {post_url}"""
+                results.append(result)
+        
+        if not results:
+            log_api_usage("Instagram", "search", limit, 0, 0.01)
+            return f"❌ No {search_type} found for '{query}'"
+        
+        log_api_usage("Instagram", "search", limit, len(results), 0.01)
+        header = f"🔍 Instagram {search_type} search for '{query}' ({len(results)} found)"
+        return header + "\n\n" + "\n---\n".join(results)
+        
+    except Exception as e:
+        logger.error(f"Instagram search error: {e}")
+        log_api_usage("Instagram", "search", limit, 0, 0.01)
+        return f"❌ Instagram search error: {str(e)}"
+
+async def get_instagram_profile(username: str, include_posts: bool = True) -> str:
+    """Deep-dive Instagram profile analysis with full bio, highlights, and engagement metrics."""
+    
+    if not APIFY_TOKEN:
+        log_api_usage("Instagram", "profile", 1, 0, 0.0)
+        return "❌ APIFY_TOKEN not configured. Please set APIFY_TOKEN environment variable."
+    
+    payload = {
+        "usernames": [username],
+        "resultsLimit": 12 if include_posts else 1,  # Get recent posts if requested
+        "addParentData": True
+    }
+    
+    try:
+        # Using Instagram Profile Scraper for deep analysis
+        data = await make_request(
+            f"{APIFY_API_BASE}/memo23~apify-instagram-profile-scraper/run-sync-get-dataset-items",
+            params={"token": APIFY_TOKEN},
+            json_data=payload,
+            method="POST",
+            timeout=30.0
+        )
+        
+        if not data or not data[0]:
+            log_api_usage("Instagram", "profile", 1, 0, 0.02)
+            return f"❌ Failed to get profile data for @{username}"
+        
+        profile = data[0]
+        
+        # Extract profile data
+        full_name = profile.get("fullName", "")
+        bio = profile.get("biography", "No bio")
+        followers = profile.get("followersCount", 0)
+        following = profile.get("followingCount", 0)
+        posts_count = profile.get("postsCount", 0)
+        is_verified = "✅" if profile.get("verified", False) else ""
+        is_private = "🔒" if profile.get("private", False) else ""
+        website = profile.get("website", "")
+        
+        # Calculate engagement rate if we have posts
+        total_engagement = 0
+        recent_posts = []
+        
+        if include_posts and "latestPosts" in profile:
+            posts = profile["latestPosts"][:6]  # Last 6 posts
+            for post in posts:
+                likes = post.get("likesCount", 0)
+                comments = post.get("commentsCount", 0)
+                total_engagement += likes + comments
+                
+                recent_posts.append(f"• {likes:,}❤️ {comments:,}💬 - {post.get('caption', '')[:50]}...")
+        
+        avg_engagement = total_engagement / len(recent_posts) if recent_posts else 0
+        engagement_rate = (avg_engagement / followers * 100) if followers > 0 else 0
+        
+        result = f"""👤 **@{username}** {is_verified}{is_private}
+📝 **{full_name}**
+
+📊 **Profile Stats:**
+• 👥 Followers: {followers:,}
+• 👤 Following: {following:,}
+• 📸 Posts: {posts_count:,}
+• 📈 Engagement Rate: {engagement_rate:.2f}%
+
+💬 **Bio:**
+{bio}"""
+        
+        if website:
+            result += f"\n\n🔗 **Website:** {website}"
+        
+        if recent_posts:
+            result += "\n\n� **Recent Posts Performance:**\n" + "\n".join(recent_posts)
+        
+        result += f"\n\n🔗 https://instagram.com/{username}"
+        
+        log_api_usage("Instagram", "profile", 1, 1, 0.02)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Instagram profile error: {e}")
+        log_api_usage("Instagram", "profile", 1, 0, 0.02)
+        return f"❌ Instagram profile error: {str(e)}"
+
+async def get_instagram_reels(username: str = "", hashtag: str = "", music_id: str = "", limit: int = 10) -> str:
+    """Get Instagram reels for trend analysis and short video content."""
+    limit = validate_limit(limit, MAX_LIMIT, "Instagram")
+    
+    if not APIFY_TOKEN:
+        log_api_usage("Instagram", "reels", limit, 0, 0.0)
+        return "❌ APIFY_TOKEN not configured. Please set APIFY_TOKEN environment variable."
+    
+    # Determine what type of reels to fetch
+    if username:
+        payload = {
+            "username": username,
+            "resultsLimit": limit
+        }
+        search_desc = f"from @{username}"
+    elif hashtag:
+        payload = {
+            "hashtag": hashtag,
+            "resultsLimit": limit
+        }
+        search_desc = f"for #{hashtag}"
+    elif music_id:
+        payload = {
+            "musicId": music_id,
+            "resultsLimit": limit
+        }
+        search_desc = f"using audio {music_id}"
+    else:
+        # Get trending reels
+        payload = {
+            "resultsLimit": limit
+        }
+        search_desc = "trending"
+    
+    try:
+        # Using Instagram Reel Scraper
+        data = await make_request(
+            f"{APIFY_API_BASE}/apify~instagram-reel-scraper/run-sync-get-dataset-items",
+            params={"token": APIFY_TOKEN},
+            json_data=payload,
+            method="POST",
+            timeout=30.0
+        )
+        
+        if not data:
+            log_api_usage("Instagram", "reels", limit, 0, 0.02)
+            return f"❌ Failed to get Instagram reels {search_desc}"
+        
+        results = []
+        for reel in data[:limit]:
+            owner = reel.get("ownerUsername", "Unknown")
+            caption = reel.get("caption", "")[:150] + "..." if len(reel.get("caption", "")) > 150 else reel.get("caption", "")
+            plays = reel.get("playCount", 0)
+            likes = reel.get("likesCount", 0)
+            comments = reel.get("commentsCount", 0)
+            duration = reel.get("videoDuration", 0)
+            music_name = reel.get("musicName", "Original audio")
+            reel_url = reel.get("url", "")
+            
+            result = f"""🎬 **Reel by @{owner}**
+▶️ {plays:,} plays | ❤️ {likes:,} | 💬 {comments:,}
+⏱️ {duration}s | 🎵 {music_name}
+📝 {caption}
+🔗 {reel_url}"""
+            results.append(result)
+        
+        if not results:
+            log_api_usage("Instagram", "reels", limit, 0, 0.02)
+            return f"❌ No reels found {search_desc}"
+        
+        log_api_usage("Instagram", "reels", limit, len(results), 0.02)
+        header = f"🎬 Instagram Reels {search_desc} ({len(results)} found)"
+        return header + "\n\n" + "\n---\n".join(results)
+        
+    except Exception as e:
+        logger.error(f"Instagram reels error: {e}")
+        log_api_usage("Instagram", "reels", limit, 0, 0.02)
+        return f"❌ Instagram reels error: {str(e)}"
+
+async def search_instagram_hashtag(hashtag: str, limit: int = 10) -> str:
+    """In-depth Instagram hashtag analysis with engagement metrics and trending content."""
+    limit = validate_limit(limit, MAX_LIMIT, "Instagram")
+    
+    if not APIFY_TOKEN:
+        log_api_usage("Instagram", "hashtag", limit, 0, 0.0)
+        return "❌ APIFY_TOKEN not configured. Please set APIFY_TOKEN environment variable."
+    
+    # Remove # if included
+    hashtag = hashtag.lstrip("#")
+    
+    payload = {
+        "hashtags": [hashtag],
+        "resultsLimit": limit,
+        "searchLimit": limit,
+        "searchType": "hashtag"
+    }
+    
+    try:
+        # Using Instagram API Scraper for hashtag analysis
+        data = await make_request(
+            f"{APIFY_API_BASE}/apify~instagram-api-scraper/run-sync-get-dataset-items",
+            params={"token": APIFY_TOKEN},
+            json_data=payload,
+            method="POST",
+            timeout=30.0
+        )
+        
+        if not data:
+            log_api_usage("Instagram", "hashtag", limit, 0, 0.02)
+            return f"❌ Failed to analyze hashtag #{hashtag}"
+        
+        # Calculate hashtag statistics
+        total_likes = 0
+        total_comments = 0
+        top_posts = []
+        
+        for post in data[:limit]:
+            owner = post.get("ownerUsername", "Unknown")
+            caption = post.get("caption", "")[:150] + "..." if len(post.get("caption", "")) > 150 else post.get("caption", "")
+            likes = post.get("likesCount", 0)
+            comments = post.get("commentsCount", 0)
+            post_type = "🎬 Reel" if post.get("type", "") == "Reel" else "📸 Post"
+            post_url = post.get("url", "")
+            
+            total_likes += likes
+            total_comments += comments
+            
+            result = f"""{post_type} **by @{owner}**
+❤️ {likes:,} | 💬 {comments:,}
+📝 {caption}
+🔗 {post_url}"""
+            top_posts.append(result)
+        
+        # Calculate averages
+        avg_likes = total_likes / len(data) if data else 0
+        avg_comments = total_comments / len(data) if data else 0
+        total_engagement = total_likes + total_comments
+        
+        header = f"""#️⃣ **Instagram Hashtag Analysis: #{hashtag}**
+
+� **Hashtag Stats:**
+• 📸 Posts analyzed: {len(data)}
+• ❤️ Average likes: {avg_likes:,.0f}
+• 💬 Average comments: {avg_comments:,.0f}
+• 📈 Total engagement: {total_engagement:,}
+
+🔥 **Top Posts:**"""
+        
+        if not top_posts:
+            log_api_usage("Instagram", "hashtag", limit, 0, 0.02)
+            return f"❌ No posts found for #{hashtag}"
+        
+        log_api_usage("Instagram", "hashtag", limit, len(top_posts), 0.02)
+        return header + "\n\n" + "\n---\n".join(top_posts[:10])  # Show top 10
+        
+    except Exception as e:
+        logger.error(f"Instagram hashtag error: {e}")
+        log_api_usage("Instagram", "hashtag", limit, 0, 0.02)
+        return f"❌ Instagram hashtag error: {str(e)}"
 
 # ============================================================================
 # STDIO MODE (for Claude Desktop)
