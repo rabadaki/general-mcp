@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import time
+import random
 
 # Environment and configuration
 import os
@@ -55,6 +56,27 @@ APIFY_TOKEN = os.environ.get("APIFY_TOKEN")
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY") 
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY")
 SCRAPINGBEE_API_KEY = os.environ.get("SCRAPINGBEE_API_KEY")
+
+# Improved User-Agent rotation for Reddit
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0"
+]
+
+def get_reddit_headers():
+    """Get randomized headers for Reddit requests to avoid blocking"""
+    return {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -529,7 +551,7 @@ async def search_reddit(
     time: str = "all",
     limit: int = 10
 ) -> str:
-    """Search Reddit for posts using free Reddit JSON API."""
+    """Search Reddit for posts using improved headers to avoid blocking."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
     
     # Build Reddit search URL using free JSON API
@@ -553,16 +575,17 @@ async def search_reddit(
             "limit": limit
         }
     
-    # Add User-Agent header (required by Reddit)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; MCPBot/1.0; +https://general-mcp.onrender.com)"
-    }
+    # Use improved headers to avoid blocking
+    headers = get_reddit_headers()
+    
+    # Add small delay to avoid rate limiting
+    await asyncio.sleep(random.uniform(0.5, 1.5))
     
     data = await make_request(search_url, params=params, headers=headers)
     
     if not data or not data.get("data") or not data["data"].get("children"):
         log_api_usage("Reddit", "search", limit, 0, 0.0)  # Free API
-        return f"❌ No results found for Reddit search: '{query}'"
+        return f"❌ No results found for Reddit search: '{query}'. This may be due to rate limiting or the search term not being found."
     
     results = []
     posts = data["data"]["children"]
@@ -702,7 +725,7 @@ async def get_api_usage_stats() -> str:
 # ============================================================================
 
 async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "day", limit: int = 10) -> str:
-    """Get posts from specific subreddit using free Reddit API."""
+    """Get posts from specific subreddit using improved headers to avoid blocking."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
     
     # Map sort options to Reddit API format
@@ -722,14 +745,16 @@ async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "da
         url = f"https://www.reddit.com/r/{subreddit}/{reddit_sort}.json"
         params = {"limit": limit}
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; MCPBot/1.0; +https://general-mcp.onrender.com)"
-    }
+    # Use improved headers to avoid blocking
+    headers = get_reddit_headers()
+    
+    # Add small delay to avoid rate limiting
+    await asyncio.sleep(random.uniform(0.5, 1.5))
     
     data = await make_request(url, params=params, headers=headers)
     
     if not data or not data.get("data") or not data["data"].get("children"):
-        return f"❌ Failed to fetch posts from r/{subreddit}. Subreddit may not exist or be private."
+        return f"❌ Failed to fetch posts from r/{subreddit}. This may be due to rate limiting, the subreddit not existing, or being private."
     
     results = []
     posts = data["data"]["children"]
@@ -755,7 +780,7 @@ async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "da
     return header + "\n\n" + "\n---\n".join(results)
 
 async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
-    """Get comments from a Reddit post using free Reddit API."""
+    """Get comments from a Reddit post using improved headers to avoid blocking."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
     
     # Convert Reddit URL to JSON API URL
@@ -768,14 +793,16 @@ async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
     else:
         json_url = post_url
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; MCPBot/1.0; +https://general-mcp.onrender.com)"
-    }
+    # Use improved headers to avoid blocking
+    headers = get_reddit_headers()
+    
+    # Add small delay to avoid rate limiting
+    await asyncio.sleep(random.uniform(0.5, 1.5))
     
     data = await make_request(json_url, headers=headers)
     
     if not data or not isinstance(data, list) or len(data) < 2:
-        return f"❌ Failed to fetch comments from post. URL may be invalid."
+        return f"❌ Failed to fetch comments from post. This may be due to rate limiting, invalid URL, or the post being deleted."
     
     # Reddit returns [post_data, comments_data]
     comments_data = data[1]
@@ -1078,54 +1105,52 @@ async def search_perplexity(query: str, max_results: int = 10) -> str:
     return result
 
 async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: str = "US") -> str:
-    """Google Trends analysis using pytrends library."""
+    """Google Trends analysis using pytrends library with simplified initialization."""
     
     try:
         from pytrends.request import TrendReq
         
-        # Initialize pytrends
+        # Initialize pytrends with minimal parameters to avoid compatibility issues
         pytrends = TrendReq(hl='en-US', tz=360)
         
         # Build the payload
         pytrends.build_payload([query], cat=0, timeframe=timeframe, geo=geo, gprop='')
         
-        # Get interest over time
-        interest_over_time = pytrends.interest_over_time()
-        
-        # Get related queries
-        related_queries = pytrends.related_queries()
-        
-        # Get related topics  
-        related_topics = pytrends.related_topics()
-        
         results = []
         results.append(f"📈 **Google Trends Analysis for '{query}'**")
         results.append(f"🌍 Region: {geo} | 📅 Timeframe: {timeframe}")
         
-        if not interest_over_time.empty:
-            # Get trend statistics
-            avg_interest = interest_over_time[query].mean()
-            max_interest = interest_over_time[query].max()
-            latest_interest = interest_over_time[query].iloc[-1]
+        # Try to get interest over time (most reliable)
+        try:
+            interest_over_time = pytrends.interest_over_time()
             
-            results.append(f"\n📊 **Interest Statistics:**")
-            results.append(f"• Average Interest: {avg_interest:.1f}")
-            results.append(f"• Peak Interest: {max_interest}")
-            results.append(f"• Latest Interest: {latest_interest}")
+            if not interest_over_time.empty and query in interest_over_time.columns:
+                # Get trend statistics
+                avg_interest = interest_over_time[query].mean()
+                max_interest = interest_over_time[query].max()
+                latest_interest = interest_over_time[query].iloc[-1]
+                
+                results.append(f"\n📊 **Interest Statistics:**")
+                results.append(f"• Average Interest: {avg_interest:.1f}")
+                results.append(f"• Peak Interest: {max_interest}")
+                results.append(f"• Latest Interest: {latest_interest}")
+            else:
+                results.append(f"\n📊 **Interest Over Time**: No data available")
+        except Exception as e:
+            results.append(f"\n📊 **Interest Over Time**: Error - {str(e)}")
         
-        # Add related queries
-        if related_queries and query in related_queries and related_queries[query]['top'] is not None:
-            top_queries = related_queries[query]['top'].head(5)
-            results.append(f"\n🔍 **Top Related Queries:**")
-            for idx, row in top_queries.iterrows():
-                results.append(f"• {row['query']} ({row['value']})")
-        
-        # Add related topics  
-        if related_topics and query in related_topics and related_topics[query]['top'] is not None:
-            top_topics = related_topics[query]['top'].head(3)
-            results.append(f"\n📝 **Top Related Topics:**")
-            for idx, row in top_topics.iterrows():
-                results.append(f"• {row['topic_title']} ({row['value']})")
+        # Try to get related queries (with better error handling)
+        try:
+            related_queries = pytrends.related_queries()
+            if related_queries and query in related_queries and related_queries[query] is not None:
+                if 'top' in related_queries[query] and related_queries[query]['top'] is not None:
+                    top_queries = related_queries[query]['top'].head(3)
+                    if not top_queries.empty:
+                        results.append(f"\n🔍 **Top Related Queries:**")
+                        for idx, row in top_queries.iterrows():
+                            results.append(f"• {row['query']} ({row['value']})")
+        except Exception as e:
+            results.append(f"\n🔍 **Related Queries**: Error - {str(e)}")
         
         log_api_usage("GoogleTrends", "search", 1, 1, 0.0)  # Free API
         return "\n".join(results)
@@ -1136,55 +1161,78 @@ async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: s
         
     except Exception as e:
         log_api_usage("GoogleTrends", "search", 1, 0, 0.0)
-        return f"❌ Google Trends analysis failed: {str(e)}"
+        return f"❌ Google Trends analysis failed: {str(e)}. This may be due to rate limiting or Google Trends changes."
 
 async def compare_google_trends(terms: list, timeframe: str = "today 12-m", geo: str = "US") -> str:
-    """Compare multiple terms in Google Trends using pytrends library."""
+    """Compare multiple terms in Google Trends using pytrends library with simplified initialization."""
+    
+    if len(terms) > 5:
+        terms = terms[:5]  # Google Trends only allows 5 terms max
     
     try:
         from pytrends.request import TrendReq
         
-        # Initialize pytrends
+        # Initialize pytrends with minimal parameters to avoid compatibility issues
         pytrends = TrendReq(hl='en-US', tz=360)
         
         # Build the payload with multiple terms
         pytrends.build_payload(terms, cat=0, timeframe=timeframe, geo=geo, gprop='')
-        
-        # Get interest over time for comparison
-        interest_over_time = pytrends.interest_over_time()
         
         results = []
         results.append(f"📊 **Google Trends Comparison**")
         results.append(f"🔍 Terms: {', '.join(terms)}")
         results.append(f"🌍 Region: {geo} | 📅 Timeframe: {timeframe}")
         
-        if not interest_over_time.empty:
-            results.append(f"\n📈 **Comparison Results:**")
+        # Try to get interest over time for comparison
+        try:
+            interest_over_time = pytrends.interest_over_time()
             
-            # Calculate stats for each term
-            for term in terms:
-                if term in interest_over_time.columns:
-                    avg_interest = interest_over_time[term].mean()
-                    max_interest = interest_over_time[term].max()
-                    latest_interest = interest_over_time[term].iloc[-1]
-                    
-                    results.append(f"• **{term}**: Avg {avg_interest:.1f} | Peak {max_interest} | Latest {latest_interest}")
-            
-            # Find the winner
-            if len(terms) > 1:
-                latest_values = {term: interest_over_time[term].iloc[-1] for term in terms if term in interest_over_time.columns}
-                if latest_values:
-                    winner = max(latest_values, key=latest_values.get)
-                    winner_score = latest_values[winner]
-                    results.append(f"\n🏆 **Currently Leading**: {winner} ({winner_score})")
+            if not interest_over_time.empty:
+                results.append(f"\n📈 **Comparison Results:**")
+                
+                # Calculate stats for each term
+                for term in terms:
+                    if term in interest_over_time.columns:
+                        try:
+                            avg_interest = interest_over_time[term].mean()
+                            max_interest = interest_over_time[term].max()
+                            latest_interest = interest_over_time[term].iloc[-1]
+                            
+                            results.append(f"• **{term}**: Avg {avg_interest:.1f} | Peak {max_interest} | Latest {latest_interest}")
+                        except Exception as e:
+                            results.append(f"• **{term}**: Error calculating stats")
+                
+                # Find the winner
+                if len(terms) > 1:
+                    try:
+                        latest_values = {}
+                        for term in terms:
+                            if term in interest_over_time.columns:
+                                latest_values[term] = interest_over_time[term].iloc[-1]
+                        
+                        if latest_values:
+                            winner = max(latest_values, key=latest_values.get)
+                            winner_score = latest_values[winner]
+                            results.append(f"\n🏆 **Currently Leading**: {winner} ({winner_score})")
+                    except Exception as e:
+                        results.append(f"\n🏆 **Winner calculation**: Error - {str(e)}")
+            else:
+                results.append(f"\n📈 **Comparison Results**: No data available")
+        except Exception as e:
+            results.append(f"\n📈 **Comparison Results**: Error - {str(e)}")
         
-        # Get related queries for the first term
-        related_queries = pytrends.related_queries()
-        if related_queries and terms[0] in related_queries and related_queries[terms[0]]['top'] is not None:
-            top_queries = related_queries[terms[0]]['top'].head(3)
-            results.append(f"\n🔍 **Related to '{terms[0]}':**")
-            for idx, row in top_queries.iterrows():
-                results.append(f"• {row['query']} ({row['value']})")
+        # Get related queries for the first term (with error handling)
+        try:
+            related_queries = pytrends.related_queries()
+            if related_queries and terms[0] in related_queries and related_queries[terms[0]] is not None:
+                if 'top' in related_queries[terms[0]] and related_queries[terms[0]]['top'] is not None:
+                    top_queries = related_queries[terms[0]]['top'].head(3)
+                    if not top_queries.empty:
+                        results.append(f"\n🔍 **Related to '{terms[0]}':**")
+                        for idx, row in top_queries.iterrows():
+                            results.append(f"• {row['query']} ({row['value']})")
+        except Exception as e:
+            results.append(f"\n🔍 **Related Queries**: Error - {str(e)}")
         
         log_api_usage("GoogleTrends", "compare", len(terms), 1, 0.0)  # Free API
         return "\n".join(results)
@@ -1195,7 +1243,7 @@ async def compare_google_trends(terms: list, timeframe: str = "today 12-m", geo:
         
     except Exception as e:
         log_api_usage("GoogleTrends", "compare", len(terms), 0, 0.0)
-        return f"❌ Google Trends comparison failed: {str(e)}"
+        return f"❌ Google Trends comparison failed: {str(e)}. This may be due to rate limiting or Google Trends changes."
 
 # ============================================================================
 # MAIN APPLICATION
