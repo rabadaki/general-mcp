@@ -1183,9 +1183,19 @@ async def get_twitter_profile(username: str, get_followers: bool = False, get_fo
     if not data:
         return f"❌ Failed to get profile for @{username}"
     
-    # First item should be the main user
-    if not data or data[0].get("userName") != username:
-        return f"❌ Could not find profile data for @{username}"
+    # Validate data structure
+    if not isinstance(data, list) or len(data) == 0:
+        return f"❌ No profile data returned for @{username}"
+    
+    # Debug: Check what we got
+    first_item = data[0]
+    if not isinstance(first_item, dict):
+        return f"❌ Unexpected profile data format for @{username}: {type(first_item)}"
+    
+    # Check if we have the expected user (case-insensitive)
+    returned_username = first_item.get("userName", "").lower()
+    if returned_username != username.lower():
+        return f"❌ Profile mismatch for @{username} (got: @{returned_username}). Available keys: {list(first_item.keys())[:5]}"
     
     profile = data[0]
     
@@ -1298,7 +1308,14 @@ async def get_tiktok_user_videos(username: str, limit: int = 10, start_date: str
     try:
         data = await make_request(f"{APIFY_API_BASE}/clockworks~free-tiktok-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=90)
         
-        if data is None or len(data) == 0:
+        # Validate data is a list and has content
+        if data is None:
+            return f"❌ No response from TikTok API for @{username}"
+        elif isinstance(data, int):
+            return f"❌ TikTok API returned status code: {data} for @{username}"
+        elif not isinstance(data, list):
+            return f"❌ Unexpected TikTok API response format for @{username}: {type(data)}"
+        elif len(data) == 0:
             return f"❌ No videos found for @{username}. This could be due to:\n• Private account\n• No videos posted\n• TikTok rate limiting\n• Username not found"
     except Exception as e:
         return f"❌ TikTok API error for @{username}: {str(e)}"
