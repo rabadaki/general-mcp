@@ -86,6 +86,9 @@ SCRAPINGBEE_API_KEY = os.environ.get("SCRAPINGBEE_API_KEY")
 DATAFORSEO_LOGIN = os.environ.get("DATAFORSEO_LOGIN", "sarubaito@pm.me")
 DATAFORSEO_PASSWORD = os.environ.get("DATAFORSEO_PASSWORD", "94c575f885c863f8")
 
+# API timeout constants
+APIFY_TIMEOUT = 90.0  # Apify actors need generous timeout
+
 # Rate limiting for Google Trends
 GOOGLE_TRENDS_RATE_LIMIT = {
     "requests_per_minute": 30,  # Conservative limit
@@ -1293,10 +1296,10 @@ async def get_tiktok_user_videos(username: str, limit: int = 10, start_date: str
     
     # Use 90 second timeout as requested
     try:
-        data = await make_request(f"{APIFY_API_BASE}/clockworks/free-tiktok-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=90)
+        data = await make_request(f"{APIFY_API_BASE}/clockworks~free-tiktok-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=90)
         
-        if data is None:
-            return f"❌ Failed to get videos from @{username} - API returned no data"
+        if data is None or len(data) == 0:
+            return f"❌ No videos found for @{username}. This could be due to:\n• Private account\n• No videos posted\n• TikTok rate limiting\n• Username not found"
     except Exception as e:
         return f"❌ TikTok API error for @{username}: {str(e)}"
     
