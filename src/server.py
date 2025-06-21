@@ -1578,31 +1578,18 @@ async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: s
         import time
         # Use local log_api_usage function
         
-        print("🔄 Initializing pytrends with retries...")
-        # Try with retries and cookie approach
-        pytrends = TrendReq(
-            hl='en-US',
-            tz=360,
-            timeout=(10,30),
-            retries=5,
-            backoff_factor=2.0,
-            requests_args={
-                'verify': True,
-                'headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-User': '?1',
-                    'Cache-Control': 'max-age=0'
-                }
-            }
-        )
+        print("🔄 Initializing pytrends with simplified parameters...")
+        # Initialize with simplified parameters to avoid compatibility issues
+        try:
+            pytrends = TrendReq(
+                hl='en-US',
+                tz=360,
+                timeout=(10,30)
+            )
+        except Exception as init_error:
+            print(f"Error initializing TrendReq: {init_error}")
+            # Fallback to basic initialization
+            pytrends = TrendReq(hl='en-US', tz=360)
         
         print("⏳ Waiting before request...")
         time.sleep(2)  # Reduced initial wait
@@ -1917,30 +1904,17 @@ async def compare_google_trends(terms: List[str], timeframe: str = "today 12-m",
             # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
             return "❌ Maximum 5 terms can be compared at once"
             
-        # Initialize with retries and better headers
-        pytrends = TrendReq(
-            hl='en-US',
-            tz=360,
-            timeout=(10,30),
-            retries=5,
-            backoff_factor=2.0,
-            requests_args={
-                'verify': True,
-                'headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-User': '?1',
-                    'Cache-Control': 'max-age=0'
-                }
-            }
-        )
+        # Initialize with simplified parameters to avoid compatibility issues
+        try:
+            pytrends = TrendReq(
+                hl='en-US',
+                tz=360,
+                timeout=(10,30)
+            )
+        except Exception as init_error:
+            print(f"Error initializing TrendReq: {init_error}")
+            # Fallback to basic initialization
+            pytrends = TrendReq(hl='en-US', tz=360)
         
         # Wait before request
         time.sleep(2)
