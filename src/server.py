@@ -1612,12 +1612,12 @@ For now, please try again later or consider using one of the alternative service
             *[f"  • {q}" for q in rising_related]
         ]
         
-        log_api_usage("Google Trends", "search", 1, 1, 0.0)
+        # log_api_usage("Google Trends", "search", 1, 1, 0.0)
         return "\n".join(response)
         
     except TooManyRequestsError as e:
         print(f"❌ Rate limit error: {str(e)}")
-        log_api_usage("Google Trends", "search", 1, 0, 0.0)
+        # log_api_usage("Google Trends", "search", 1, 0, 0.0)
         return """❌ Google Trends is currently rate limiting requests (Error 429).
 
 This is a common issue with the unofficial Google Trends API. Here are some alternatives:
@@ -1632,7 +1632,7 @@ This is a common issue with the unofficial Google Trends API. Here are some alte
 For now, please try again later or consider using one of the alternative services."""
     except Exception as e:
         print(f"❌ Error in search_google_trends: {str(e)}")
-        log_api_usage("Google Trends", "search", 1, 0, 0.0)
+        # log_api_usage("Google Trends", "search", 1, 0, 0.0)
         return f"❌ Error analyzing trends: {str(e)}"
 
 # ============================================================================
@@ -1958,7 +1958,7 @@ For now, please try again later or consider using one of the alternative service
             else:
                 response.append(f"  • {term}: N/A")
             
-        log_api_usage("Google Trends", "compare", len(terms), 1, 0.0)
+        # log_api_usage("Google Trends", "compare", len(terms), 1, 0.0)
         return "\n".join(response)
         
     except TooManyRequestsError:
