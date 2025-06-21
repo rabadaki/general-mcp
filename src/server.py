@@ -1166,9 +1166,9 @@ async def get_twitter_profile(username: str, get_followers: bool = False, get_fo
         "customMapFunction": "(object) => { return {...object} }",
         "getFollowers": get_followers,
         "getFollowing": get_following,
-        "getRetweeters": False,
+        "getRetweeters": True,
         "includeUnavailableUsers": False,
-        "maxItems": 10 if get_followers or get_following else 1,
+        "maxItems": 5,
         "startUrls": [
             "https://twitter.com"
         ],
@@ -1349,9 +1349,27 @@ async def get_tiktok_user_videos(username: str, limit: int = 10, start_date: str
     results = []
     for video in data[:limit]:
         text = video.get("text", "")[:150]
-        likes = video.get("diggCount", 0)
-        views = video.get("playCount", 0)
-        created_at = video.get("createTime", "")[:10]
+        
+        # Handle likes and views safely - convert to int and handle potential string values
+        likes_raw = video.get("diggCount", 0)
+        views_raw = video.get("playCount", 0)
+        
+        try:
+            likes = int(likes_raw) if likes_raw is not None else 0
+        except (ValueError, TypeError):
+            likes = 0
+            
+        try:
+            views = int(views_raw) if views_raw is not None else 0
+        except (ValueError, TypeError):
+            views = 0
+        
+        created_at = video.get("createTime", "")
+        if created_at and len(str(created_at)) > 10:
+            created_at = str(created_at)[:10]
+        else:
+            created_at = str(created_at)
+            
         url = video.get("webVideoUrl", "") or video.get("videoUrl", "")
         
         results.append(f"📅 {created_at}\n📝 {text}\n👁️ {views:,} views | ❤️ {likes:,}\n🔗 {url}")
