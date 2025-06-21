@@ -648,18 +648,28 @@ async def handle_mcp_message(message: dict):
 async def handle_sse():
     """Handle Server-Sent Events for MCP communication."""
     async def event_stream():
-        # Send initial ping immediately
-        yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\"}\n\n"
-        
-        # Send a few more pings quickly for testing
-        for i in range(3):
-            await asyncio.sleep(2)  # Much shorter for testing
-            yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": {i+1}}}\n\n"
-        
-        # Then normal 30-second intervals
-        while True:
-            await asyncio.sleep(30)
+        try:
+            # Send immediate ping
             yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\"}\n\n"
+            
+            # Test rapid pings
+            await asyncio.sleep(1)
+            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": 1}\n\n"
+            
+            await asyncio.sleep(1) 
+            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": 2}\n\n"
+            
+            await asyncio.sleep(1)
+            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": 3}\n\n"
+            
+            # Keep connection alive with longer intervals
+            while True:
+                await asyncio.sleep(10)  # Shorter for debugging
+                yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"keepalive\"}\n\n"
+                
+        except Exception as e:
+            print(f"SSE Error: {e}")
+            yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
     
     return StreamingResponse(
         event_stream(),
@@ -668,7 +678,8 @@ async def handle_sse():
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "Access-Control-Allow-Headers": "*",
+            "X-Accel-Buffering": "no",
         }
     )
 
