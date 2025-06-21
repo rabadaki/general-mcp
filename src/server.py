@@ -1042,16 +1042,18 @@ async def search_twitter(query: str, limit: int = 15, sort: str = "Latest", days
         if not apify_token:
             return json.dumps({"error": "APIFY_TOKEN not found in environment variables", "status": "error"})
         
-        url = "https://api.apify.com/v2/acts/clockworks~free-twitter-scraper/run-sync-get-dataset-items"
+        url = "https://api.apify.com/v2/acts/61RPP7dywgiy0JPD0/run-sync-get-dataset-items"
         headers = {"Authorization": f"Bearer {apify_token}"}
         
         data = {
+            "twitterHandles": [],
+            "maxItems": min(limit, 50),
             "searchTerms": [query],
-            "maxTweetsPerQuery": min(limit, 50),
+            "sort": sort,
             "customMapFunction": "(object) => { return {...object} }"
         }
         
-        timeout = httpx.Timeout(3.0, connect=2.0)
+        timeout = httpx.Timeout(90.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, json=data, headers=headers)
             
@@ -1083,7 +1085,8 @@ async def search_twitter(query: str, limit: int = 15, sort: str = "Latest", days
                 return json.dumps({"success": False, "error": f"API error: {response.status_code}", "response": response.text[:500]})
     
     except Exception as e:
-        return json.dumps({"success": False, "error": f"Exception: {str(e)}"})
+        import traceback
+        return json.dumps({"success": False, "error": f"Exception in search_twitter: {str(e)}", "traceback": traceback.format_exc()})
 
 async def get_user_tweets(username: str, limit: int = 15, days_back: int = 7, start: str = None, end: str = None) -> str:
     """Get tweets from a specific user using Apify"""
@@ -1110,7 +1113,7 @@ async def get_user_tweets(username: str, limit: int = 15, days_back: int = 7, st
         if end:
             data["end"] = end
         
-        timeout = httpx.Timeout(3.0, connect=2.0)
+        timeout = httpx.Timeout(90.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, json=data, headers=headers)
             
@@ -1146,7 +1149,8 @@ async def get_user_tweets(username: str, limit: int = 15, days_back: int = 7, st
                 })
                 
     except Exception as e:
-        return json.dumps({"error": f"Exception in get_user_tweets: {str(e)}", "status": "error"})
+        import traceback
+        return json.dumps({"error": f"Exception in get_user_tweets: {str(e)}", "traceback": traceback.format_exc(), "status": "error"})
 
 async def get_twitter_profile(username: str, get_followers: bool = False, get_following: bool = False) -> str:
     """Get Twitter user profile information."""
@@ -1508,7 +1512,7 @@ async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: s
         from pytrends.exceptions import TooManyRequestsError
         import pandas as pd
         import time
-        from mcp_stdio_server import log_api_usage
+        # Use local log_api_usage function
         
         print("🔄 Initializing pytrends with retries...")
         # Try with retries and cookie approach
@@ -1544,7 +1548,7 @@ async def search_google_trends(query: str, timeframe: str = "today 12-m", geo: s
             pytrends.build_payload([query], timeframe=timeframe, geo=geo)
             print("✅ Payload built successfully")
         except TooManyRequestsError as e:
-            log_api_usage("Google Trends", "search", 1, 0, 0.0)
+            # log_api_usage("Google Trends", "search", 1, 0, 0.0)
             return """❌ Google Trends is currently rate limiting requests (Error 429).
 
 This is a common issue with the unofficial Google Trends API. Here are some alternatives:
@@ -1565,7 +1569,7 @@ For now, please try again later or consider using one of the alternative service
             try:
                 pytrends.build_payload([query], timeframe=timeframe, geo=geo)
             except TooManyRequestsError:
-                log_api_usage("Google Trends", "search", 1, 0, 0.0)
+                # log_api_usage("Google Trends", "search", 1, 0, 0.0)
                 return "❌ Google Trends is rate limiting. Please try again later."
         
         print("⏳ Waiting after payload build...")
@@ -1839,14 +1843,14 @@ async def compare_google_trends(terms: List[str], timeframe: str = "today 12-m",
         from pytrends.exceptions import TooManyRequestsError
         import pandas as pd
         import time
-        from mcp_stdio_server import log_api_usage
+        # Use local log_api_usage function
         
         # Input validation
         if not terms:
-            log_api_usage("Google Trends", "compare", 0, 0, 0.0)
+            # log_api_usage("Google Trends", "compare", 0, 0, 0.0)
             return "❌ No terms provided for comparison"
         if len(terms) > 5:
-            log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
+            # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
             return "❌ Maximum 5 terms can be compared at once"
             
         # Initialize with retries and better headers
@@ -1883,7 +1887,7 @@ async def compare_google_trends(terms: List[str], timeframe: str = "today 12-m",
         try:
             pytrends.build_payload(terms, timeframe=timeframe, geo=geo)
         except TooManyRequestsError:
-            log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
+            # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
             return """❌ Google Trends is currently rate limiting requests (Error 429).
 
 This is a common issue with the unofficial Google Trends API. Here are some alternatives:
@@ -1903,7 +1907,7 @@ For now, please try again later or consider using one of the alternative service
             try:
                 pytrends.build_payload(terms, timeframe=timeframe, geo=geo)
             except TooManyRequestsError:
-                log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
+                # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
                 return "❌ Google Trends is rate limiting. Please try again later."
         
         # Wait after payload
@@ -1913,7 +1917,7 @@ For now, please try again later or consider using one of the alternative service
         data = pytrends.interest_over_time()
         
         if data is None or data.empty:
-            log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
+            # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
             return "❌ No trend data available for these terms"
             
         # Get the most recent values for each term
@@ -1959,7 +1963,7 @@ For now, please try again later or consider using one of the alternative service
         
     except TooManyRequestsError:
         print(f"❌ Rate limit error in compare_google_trends")
-        log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
+        # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
         return """❌ Google Trends is currently rate limiting requests (Error 429).
 
 This is a common issue with the unofficial Google Trends API. Here are some alternatives:
@@ -1974,7 +1978,7 @@ This is a common issue with the unofficial Google Trends API. Here are some alte
 For now, please try again later or consider using one of the alternative services."""
     except Exception as e:
         print(f"Error in compare_google_trends: {str(e)}")
-        log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
+        # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
         return f"❌ Error comparing trends: {str(e)}"
 
 # ============================================================================
