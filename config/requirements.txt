@@ -1,0 +1,9 @@
+fastapi>=0.100.0
+httpx>=0.25.0
+uvicorn>=0.23.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+sse-starlette>=1.6.0
+
+pytrends
+urllib3<2

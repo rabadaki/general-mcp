@@ -41,16 +41,21 @@ from bs4 import BeautifulSoup
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import time
-import base64
 
 # Web framework for HTTP mode
-from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-# Set up logging to stderr so it appears in Claude logs
-logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+# Set up logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/Users/Amos/general-mcp/mcp_debug.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # ============================================================================
@@ -901,7 +906,7 @@ async def get_api_usage_stats() -> str:
 # REDDIT TOOLS
 # ============================================================================
 
-async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "day", limit: int = 10, **kwargs) -> str:
+async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "day", limit: int = 10) -> str:
     """Get posts from specific subreddit."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
     
@@ -949,7 +954,7 @@ async def get_subreddit_posts(subreddit: str, sort: str = "hot", time: str = "da
     header = f"📋 r/{subreddit} - {sort} posts ({len(results)} found)"
     return header + "\n\n" + "\n---\n".join(results)
 
-async def get_reddit_comments(post_url: str, limit: int = 10, **kwargs) -> str:
+async def get_reddit_comments(post_url: str, limit: int = 10) -> str:
     """Get comments from a Reddit post."""
     limit = validate_limit(limit, MAX_LIMIT, "Reddit")
     
@@ -1636,6 +1641,7 @@ async def make_dataforseo_request(endpoint: str, payload: Dict[str, Any]) -> Opt
     if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
         return None
     
+    import base64
     credentials = base64.b64encode(f"{DATAFORSEO_LOGIN}:{DATAFORSEO_PASSWORD}".encode()).decode()
     headers = {
         "Authorization": f"Basic {credentials}",
@@ -1729,16 +1735,11 @@ async def keyword_research(keywords: List[str], location: str = "United States",
     formatted_results = []
     for result in results:
         keyword = result.get("keyword", "Unknown")
-        volume = result.get("search_volume", 0) or 0
-        competition = result.get("competition", "Unknown") or "Unknown"
-        cpc = result.get("cpc", 0) or 0
+        volume = result.get("search_volume", 0)
+        competition = result.get("competition", "Unknown")
+        cpc = result.get("cpc", 0)
         
-        # Handle None values safely
-        volume_str = f"{volume:,}" if volume is not None else "N/A"
-        cpc_str = f"${cpc:.2f}" if cpc is not None else "N/A"
-        competition_str = str(competition).upper() if competition is not None else "UNKNOWN"
-        
-        formatted_results.append(f"🔍 **{keyword}**\n📊 Volume: {volume_str}/month\n💰 CPC: {cpc_str}\n🎯 Competition: {competition_str}")
+        formatted_results.append(f"🔍 **{keyword}**\n📊 Volume: {volume:,}/month\n💰 CPC: ${cpc:.2f}\n🎯 Competition: {competition}")
     
     log_api_usage("DataForSEO", "keywords", len(keywords), len(results), len(keywords) * 0.001)
     header = f"🔍 **Keyword Research Results** ({location}, {language})\n\nAnalyzed {len(results)} keywords"
@@ -1918,7 +1919,7 @@ async def lighthouse_audit(url: str, strategy: str = "desktop") -> str:
         log_api_usage("Lighthouse", "audit", 1, 0, 0.0)
         return f"❌ Lighthouse audit failed for {url}: {str(e)}"
 
-async def lighthouse_performance_score(url: str, **kwargs) -> str:
+async def lighthouse_performance_score(url: str) -> str:
     """Get just the performance score for a website."""
     try:
         from googleapiclient.discovery import build
@@ -1946,7 +1947,7 @@ async def lighthouse_performance_score(url: str, **kwargs) -> str:
         log_api_usage("Lighthouse", "performance", 1, 0, 0.0)
         return f"❌ Performance check failed for {url}: {str(e)}"
 
-async def lighthouse_bulk_audit(urls: list, **kwargs) -> str:
+async def lighthouse_bulk_audit(urls: list) -> str:
     """Run Lighthouse audits on multiple URLs."""
     if len(urls) > 5:
         urls = urls[:5]  # Limit to prevent quota issues
@@ -1993,28 +1994,22 @@ async def stdio_main():
         while True:
             line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
             if not line:
+                logger.warning("No input received, breaking")
                 break
-            
-            # Strip whitespace and skip empty lines
-            line = line.strip()
-            if not line:
-                continue
                 
             try:
-                message = json.loads(line)
+                message = json.loads(line.strip())
                 response = await mcp_server.handle_message(message)
                 # Only send response if not None (not a notification)
                 if response is not None:
                     print(json.dumps(response), flush=True)
-            except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON received: {repr(line[:100])} - {e}")
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON received: {line}")
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
                 
     except KeyboardInterrupt:
         logger.info("MCP Server shutting down...")
-    except Exception as e:
-        logger.error(f"Stdio loop error: {e}")
 
 # ============================================================================
 # MAIN APPLICATION
@@ -2046,30 +2041,6 @@ if __name__ == "__main__":
         @app.get("/health")
         async def health_check():
             return {"status": "healthy", "timestamp": datetime.now().isoformat()}
-        
-        @app.websocket("/ws")
-        async def websocket_endpoint(websocket: WebSocket):
-            """Handle WebSocket MCP communication."""
-            await websocket.accept()
-            mcp_server = MCPServer()
-            
-            try:
-                while True:
-                    # Receive message from Claude
-                    message = await websocket.receive_json()
-                    logger.info(f"WebSocket received: {message}")
-                    
-                    # Process with MCP server
-                    response = await mcp_server.handle_message(message)
-                    
-                    # Send response back (only if not None)
-                    if response is not None:
-                        await websocket.send_json(response)
-                        logger.info(f"WebSocket sent: {response}")
-                        
-            except Exception as e:
-                logger.error(f"WebSocket error: {e}")
-                await websocket.close()
         
         @app.get("/")
         async def root():

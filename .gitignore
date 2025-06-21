@@ -24,30 +24,31 @@ wheels/
 venv/
 env/
 ENV/
-.venv/
-.env/
+mcp_env/
 
 # IDE
 .vscode/
-.idea/
+.cursor/
 *.swp
 *.swo
 
 # OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 Thumbs.db
 
-# Test files and debugging
-test_*.py
-debug.sh
-start_server.sh
-quick_test.py
-final_validation.py
-twitter_demo.py
-
 # Logs
-*.log 
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# API keys and secrets
+.env
+secrets.json
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
