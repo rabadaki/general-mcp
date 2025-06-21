@@ -1164,8 +1164,8 @@ async def get_twitter_profile(username: str, get_followers: bool = False, get_fo
     
     payload = {
         "customMapFunction": "(object) => { return {...object} }",
-        "getFollowers": get_followers,
-        "getFollowing": get_following,
+        "getFollowers": True,
+        "getFollowing": True,
         "getRetweeters": True,
         "includeUnavailableUsers": False,
         "maxItems": 5,
