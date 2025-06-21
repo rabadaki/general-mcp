@@ -1177,8 +1177,8 @@ async def get_twitter_profile(username: str, get_followers: bool = False, get_fo
         ]
     }
     
-    # IMPORTANT: Using correct Twitter actor 61RPP7dywgiy0JPD0 (NOT V38PZzpEgOfeeWvZY)
-    data = await make_request(f"{APIFY_API_BASE}/61RPP7dywgiy0JPD0/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=APIFY_TIMEOUT)
+    # Using Twitter profile actor V38PZzpEgOfeeWvZY (returns multiple profiles, need to filter)
+    data = await make_request(f"{APIFY_API_BASE}/V38PZzpEgOfeeWvZY/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=APIFY_TIMEOUT)
     
     if not data:
         return f"❌ Failed to get profile for @{username}"
@@ -1187,17 +1187,35 @@ async def get_twitter_profile(username: str, get_followers: bool = False, get_fo
     if not isinstance(data, list) or len(data) == 0:
         return f"❌ No profile data returned for @{username}"
     
-    # Debug: Check what we got
-    first_item = data[0]
-    if not isinstance(first_item, dict):
-        return f"❌ Unexpected profile data format for @{username}: {type(first_item)}"
+    # Filter to find the correct profile (actor returns at least 5 profiles)
+    profile = None
+    possible_username_fields = ["userName", "username", "handle", "screen_name", "user_name"]
     
-    # Check if we have the expected user (case-insensitive)
-    returned_username = first_item.get("userName", "").lower()
-    if returned_username != username.lower():
-        return f"❌ Profile mismatch for @{username} (got: @{returned_username}). Available keys: {list(first_item.keys())[:5]}"
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+            
+        # Check all possible username fields
+        for field in possible_username_fields:
+            if field in item and item[field]:
+                item_username = str(item[field]).lower()
+                if item_username == username.lower():
+                    profile = item
+                    break
+        
+        if profile:
+            break
     
-    profile = data[0]
+    # If no matching profile found, show debug info
+    if not profile:
+        available_usernames = []
+        for item in data[:3]:  # Show first 3 profiles for debugging
+            if isinstance(item, dict):
+                for field in possible_username_fields:
+                    if field in item and item[field]:
+                        available_usernames.append(f"@{item[field]}")
+                        break
+        return f"❌ Could not find profile for @{username}. Found profiles: {', '.join(available_usernames)}. Total profiles returned: {len(data)}"
     
     result = f"""👤 **Twitter Profile: @{profile.get('userName', 'Unknown')}**
 
