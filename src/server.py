@@ -1329,11 +1329,11 @@ async def get_tiktok_user_videos(username: str, limit: int = 10, start_date: str
         # Validate data is a list and has content
         if data is None:
             return f"❌ No response from TikTok API for @{username}"
-        elif isinstance(data, int):
+        if isinstance(data, int):
             return f"❌ TikTok API returned status code: {data} for @{username}"
-        elif not isinstance(data, list):
+        if not isinstance(data, list):
             return f"❌ Unexpected TikTok API response format for @{username}: {type(data)}"
-        elif len(data) == 0:
+        if len(data) == 0:
             return f"❌ No videos found for @{username}. This could be due to:\n• Private account\n• No videos posted\n• TikTok rate limiting\n• Username not found"
     except Exception as e:
         return f"❌ TikTok API error for @{username}: {str(e)}"
