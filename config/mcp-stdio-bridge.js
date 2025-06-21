@@ -2,7 +2,7 @@
 
 const readline = require('readline');
 
-const MCP_SERVER_URL = 'https://general-mcp.onrender.com/message';
+const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://general-mcp-production.up.railway.app/message';
 
 // Use built-in fetch if available (Node 18+), otherwise use https module
 let fetchFunction;
@@ -66,24 +66,59 @@ rl.on('line', async (line) => {
     message = JSON.parse(line.trim());
     messageId = message.id || null;
     
-    const response = await fetchFunction(MCP_SERVER_URL, {
+    // Add timeout - increased for API calls that can take longer
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 120000); // 2 minute timeout for API calls
+    });
+    
+    const fetchPromise = fetchFunction(MCP_SERVER_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(message)
     });
+    
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const result = await response.json();
+    const responseText = await response.text();
+    
+    // Handle empty responses
+    if (!responseText || responseText.trim() === '') {
+      // For notifications (no id), don't send any response
+      if (messageId === null || messageId === undefined) {
+        return;
+      }
+      // For requests with id, send empty success response
+      const emptyResponse = {
+        jsonrpc: "2.0",
+        id: messageId,
+        result: {}
+      };
+      console.log(JSON.stringify(emptyResponse));
+      return;
+    }
+    
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
+    }
     
     // Handle notification responses - don't send any response
     if (result && result.__notification__ === true) {
       process.stderr.write(`Debug: Notification handled, no response sent\n`);
       return;
+    }
+    
+    // Ensure we have a valid response object
+    if (!result || typeof result !== 'object') {
+      result = {};
     }
     
     // Comprehensive response validation and repair
@@ -114,6 +149,24 @@ rl.on('line', async (line) => {
       if (!result.error && !result.result) {
         result.result = {};
       }
+      
+      // Final validation - never send null as a response
+      if (result === null || result === undefined) {
+        result = {
+          jsonrpc: "2.0",
+          id: messageId,
+          result: {}
+        };
+      }
+    }
+    
+    // Double-check we're not sending null
+    if (result === null || result === undefined) {
+      result = {
+        jsonrpc: "2.0", 
+        id: messageId,
+        result: {}
+      };
     }
     
     console.log(JSON.stringify(result));
