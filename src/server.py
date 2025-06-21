@@ -648,9 +648,15 @@ async def handle_mcp_message(message: dict):
 async def handle_sse():
     """Handle Server-Sent Events for MCP communication."""
     async def event_stream():
+        # Send initial ping immediately
         yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\"}\n\n"
         
-        # Keep connection alive
+        # Send a few more pings quickly for testing
+        for i in range(3):
+            await asyncio.sleep(2)  # Much shorter for testing
+            yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": {i+1}}}\n\n"
+        
+        # Then normal 30-second intervals
         while True:
             await asyncio.sleep(30)
             yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\"}\n\n"
@@ -662,6 +668,7 @@ async def handle_sse():
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
         }
     )
 
