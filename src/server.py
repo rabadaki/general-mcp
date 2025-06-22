@@ -26,7 +26,7 @@ Usage: python server.py (runs on http://localhost:8000)
 """
 
 # MCP and web framework
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
