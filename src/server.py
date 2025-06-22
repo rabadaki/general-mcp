@@ -55,6 +55,17 @@ import os
 # Initialize FastAPI app
 app = FastAPI(title="General MCP Server", version="1.0.0")
 
+# Add middleware to log all requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"🌐 {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
+    if request.url.path not in ["/health", "/", "/mcp/info"]:  # Don't spam logs with health checks
+        print(f"📋 Query params: {dict(request.query_params)}")
+    response = await call_next(request)
+    if response.status_code == 404:
+        print(f"❌ 404 Not Found: {request.method} {request.url.path}")
+    return response
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -726,6 +737,25 @@ async def mcp_connect(request: dict):
                 "version": "1.0.0"
             }
         }
+    }
+
+@app.post("/mcp")
+async def mcp_endpoint(message: dict, request: Request):
+    """Alternative MCP endpoint that Claude AI web might expect."""
+    print(f"📥 /mcp endpoint called with: {message}")
+    # Redirect to main message handler
+    return await handle_mcp_message(message, request)
+
+@app.get("/v1/servers")
+async def list_servers():
+    """List available MCP servers."""
+    return {
+        "servers": [{
+            "name": "General MCP Server",
+            "version": "1.0.0",
+            "url": "https://general-mcp-production.up.railway.app",
+            "capabilities": ["tools", "resources", "prompts"]
+        }]
     }
 
 @app.get("/mcp/info")
