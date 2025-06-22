@@ -506,9 +506,15 @@ TOOLS = [
 # ============================================================================
 
 @app.post("/message")
-async def handle_mcp_message(message: dict, authorization: str = None):
+async def handle_mcp_message(message: dict, request: Request, authorization: str = None):
     """Handle MCP protocol messages over HTTP."""
     try:
+        # Log all incoming requests for debugging
+        print(f"📥 Incoming request from {request.client.host if request.client else 'unknown'}")
+        print(f"📝 Headers: {dict(request.headers)}")
+        print(f"💬 Message: {message}")
+        print(f"🔐 Authorization: {authorization}")
+        
         # Optional authentication check (disabled for now)
         # if authorization and not authorization.startswith("Bearer "):
         #     raise HTTPException(status_code=401, detail="Invalid authorization header")
@@ -740,6 +746,35 @@ async def mcp_info():
             "required": False
         }
     }
+
+@app.get("/.well-known/oauth-authorization-server")
+async def oauth_metadata():
+    """OAuth 2.0 authorization server metadata."""
+    return {
+        "issuer": "https://general-mcp-production.up.railway.app",
+        "authorization_endpoint": "https://general-mcp-production.up.railway.app/authorize",
+        "token_endpoint": "https://general-mcp-production.up.railway.app/token",
+        "registration_endpoint": "https://general-mcp-production.up.railway.app/register",
+        "scopes_supported": ["mcp:read", "mcp:write"],
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "code_challenge_methods_supported": ["S256"]
+    }
+
+@app.post("/register")
+async def oauth_register(request: dict):
+    """OAuth 2.0 client registration."""
+    return {
+        "client_id": "mcp-client-" + str(hash(str(request)))[-8:],
+        "client_secret": "mcp-secret-" + str(hash(str(request)))[-16:],
+        "registration_access_token": "mcp-token-" + str(hash(str(request)))[-16:],
+        "registration_client_uri": "https://general-mcp-production.up.railway.app/register"
+    }
+
+@app.post("/")
+async def root_post():
+    """Handle POST to root - redirect to /message."""
+    raise HTTPException(status_code=307, detail="Use /message endpoint for MCP communication")
 
 @app.get("/")
 async def root():
