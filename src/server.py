@@ -89,6 +89,9 @@ DATAFORSEO_PASSWORD = os.environ.get("DATAFORSEO_PASSWORD", "94c575f885c863f8")
 # API timeout constants
 APIFY_TIMEOUT = 90.0  # Apify actors need generous timeout
 
+# MCP Authentication
+MCP_API_KEY = os.environ.get("MCP_API_KEY", "mcp-general-server-key-2024")  # Default key for testing
+
 # Rate limiting for Google Trends
 GOOGLE_TRENDS_RATE_LIMIT = {
     "requests_per_minute": 30,  # Conservative limit
@@ -503,9 +506,16 @@ TOOLS = [
 # ============================================================================
 
 @app.post("/message")
-async def handle_mcp_message(message: dict):
+async def handle_mcp_message(message: dict, authorization: str = None):
     """Handle MCP protocol messages over HTTP."""
     try:
+        # Optional authentication check (disabled for now)
+        # if authorization and not authorization.startswith("Bearer "):
+        #     raise HTTPException(status_code=401, detail="Invalid authorization header")
+        # 
+        # auth_token = authorization.replace("Bearer ", "") if authorization else None
+        # if auth_token and auth_token != MCP_API_KEY:
+        #     raise HTTPException(status_code=401, detail="Invalid API key")
         method = message.get("method")
         message_id = message.get("id")  # Don't default to 0 - keep None if not provided
         
@@ -690,6 +700,46 @@ async def handle_sse():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "server": "General MCP Server", "version": "1.0.0"}
+
+@app.post("/connect")
+async def mcp_connect(request: dict):
+    """MCP connection endpoint for Claude AI web."""
+    return {
+        "jsonrpc": "2.0",
+        "id": request.get("id"),
+        "result": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "tools": {},
+                "resources": {},
+                "prompts": {},
+                "logging": {}
+            },
+            "serverInfo": {
+                "name": "General MCP Server",
+                "version": "1.0.0"
+            }
+        }
+    }
+
+@app.get("/mcp/info")
+async def mcp_info():
+    """MCP server information endpoint."""
+    return {
+        "name": "General MCP Server", 
+        "version": "1.0.0",
+        "protocol": "2024-11-05",
+        "capabilities": ["tools", "resources", "prompts"],
+        "endpoints": {
+            "message": "/message",
+            "sse": "/sse",
+            "health": "/health"
+        },
+        "auth": {
+            "type": "bearer",
+            "required": False
+        }
+    }
 
 @app.get("/")
 async def root():
