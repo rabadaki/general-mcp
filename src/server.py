@@ -59,11 +59,14 @@ app = FastAPI(title="General MCP Server", version="1.0.0")
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     print(f"🌐 {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
-    if request.url.path not in ["/health", "/", "/mcp/info"]:  # Don't spam logs with health checks
+    if request.url.path not in ["/health"]:  # Don't spam logs with health checks only
         print(f"📋 Query params: {dict(request.query_params)}")
+        print(f"📋 Headers: {dict(request.headers)}")
     response = await call_next(request)
     if response.status_code == 404:
         print(f"❌ 404 Not Found: {request.method} {request.url.path}")
+    elif response.status_code >= 400:
+        print(f"❌ {response.status_code} Error: {request.method} {request.url.path}")
     return response
 
 # Add CORS middleware
@@ -801,6 +804,18 @@ async def mcp_info():
         }
     }
 
+@app.options("/message")
+async def message_options():
+    """Handle CORS preflight for /message endpoint."""
+    return Response(
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
+
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_metadata():
     """OAuth 2.0 authorization server metadata."""
@@ -876,7 +891,12 @@ async def oauth_token(request: Request):
         "access_token": access_token,
         "token_type": "Bearer", 
         "expires_in": 3600,
-        "scope": "mcp:read mcp:write"
+        "scope": "mcp:read mcp:write",
+        "mcp_endpoint": "https://general-mcp-production.up.railway.app/message",
+        "server_info": {
+            "name": "General MCP Server",
+            "version": "1.0.0"
+        }
     }
 
 @app.post("/")
