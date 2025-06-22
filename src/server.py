@@ -27,7 +27,7 @@ Usage: python server.py (runs on http://localhost:8000)
 
 # MCP and web framework
 from fastapi import FastAPI, HTTPException, Response, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -799,6 +799,53 @@ async def oauth_register(request: dict):
         "client_secret": "mcp-secret-" + str(hash(str(request)))[-16:],
         "registration_access_token": "mcp-token-" + str(hash(str(request)))[-16:],
         "registration_client_uri": "https://general-mcp-production.up.railway.app/register"
+    }
+
+@app.get("/authorize")
+async def oauth_authorize(
+    response_type: str,
+    client_id: str, 
+    redirect_uri: str,
+    scope: str,
+    code_challenge: str,
+    code_challenge_method: str,
+    state: str
+):
+    """OAuth 2.0 authorization endpoint."""
+    print(f"🔐 OAuth authorize request: client_id={client_id}, redirect_uri={redirect_uri}")
+    
+    # Generate authorization code
+    auth_code = "mcp_auth_" + str(hash(f"{client_id}{state}"))[-16:]
+    
+    # Redirect back to Claude AI with authorization code
+    callback_url = f"{redirect_uri}?code={auth_code}&state={state}"
+    print(f"↩️ Redirecting to: {callback_url}")
+    
+    return RedirectResponse(url=callback_url)
+
+@app.post("/token")
+async def oauth_token(
+    grant_type: str,
+    code: str,
+    redirect_uri: str,
+    client_id: str,
+    code_verifier: str
+):
+    """OAuth 2.0 token endpoint."""
+    print(f"🎫 Token request: grant_type={grant_type}, code={code}, client_id={client_id}")
+    
+    # Validate the authorization code (simple validation)
+    if not code.startswith("mcp_auth_"):
+        raise HTTPException(status_code=400, detail="Invalid authorization code")
+    
+    # Generate access token
+    access_token = "mcp_token_" + str(hash(f"{client_id}{code}"))[-32:]
+    
+    return {
+        "access_token": access_token,
+        "token_type": "Bearer", 
+        "expires_in": 3600,
+        "scope": "mcp:read mcp:write"
     }
 
 @app.post("/")
