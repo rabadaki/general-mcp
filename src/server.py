@@ -824,18 +824,25 @@ async def oauth_authorize(
     return RedirectResponse(url=callback_url)
 
 @app.post("/token")
-async def oauth_token(
-    grant_type: str,
-    code: str,
-    redirect_uri: str,
-    client_id: str,
-    code_verifier: str
-):
+async def oauth_token(request: Request):
     """OAuth 2.0 token endpoint."""
-    print(f"🎫 Token request: grant_type={grant_type}, code={code}, client_id={client_id}")
+    # OAuth token requests use form data, not JSON
+    form_data = await request.form()
     
-    # Validate the authorization code (simple validation)
-    if not code.startswith("mcp_auth_"):
+    grant_type = form_data.get("grant_type")
+    code = form_data.get("code") 
+    redirect_uri = form_data.get("redirect_uri")
+    client_id = form_data.get("client_id")
+    code_verifier = form_data.get("code_verifier")
+    
+    print(f"🎫 Token request: grant_type={grant_type}, code={code}, client_id={client_id}")
+    print(f"📝 All form data: {dict(form_data)}")
+    
+    # Validate required parameters
+    if not grant_type or grant_type != "authorization_code":
+        raise HTTPException(status_code=400, detail="Invalid grant_type")
+    
+    if not code or not code.startswith("mcp_auth_"):
         raise HTTPException(status_code=400, detail="Invalid authorization code")
     
     # Generate access token
