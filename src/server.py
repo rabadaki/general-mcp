@@ -520,21 +520,27 @@ TOOLS = [
 async def handle_mcp_message(message: dict, request: Request, authorization: str = None):
     """Handle MCP protocol messages over HTTP."""
     try:
-        # Log all incoming requests for debugging
-        print(f"📥 Incoming request from {request.client.host if request.client else 'unknown'}")
-        print(f"📝 Headers: {dict(request.headers)}")
-        print(f"💬 Message: {message}")
-        print(f"🔐 Authorization: {authorization}")
+        # Extract authentication token from params or headers
+        auth_token = None
+        if authorization and authorization.startswith("Bearer "):
+            auth_token = authorization.replace("Bearer ", "")
         
-        # Optional authentication check (disabled for now)
-        # if authorization and not authorization.startswith("Bearer "):
-        #     raise HTTPException(status_code=401, detail="Invalid authorization header")
-        # 
-        # auth_token = authorization.replace("Bearer ", "") if authorization else None
-        # if auth_token and auth_token != MCP_API_KEY:
-        #     raise HTTPException(status_code=401, detail="Invalid API key")
+        # Check for Claude's auth token in message params
+        params = message.get("params", {})
+        claude_auth_token = params.get("_claudeMcpAuthToken")
+        
+        # Log all incoming requests for debugging (but hide sensitive tokens)
+        print(f"📥 Incoming request from {request.client.host if request.client else 'unknown'}")
+        print(f"🔐 Auth token present: {bool(auth_token or claude_auth_token)}")
+        
+        # For tool calls, we need to validate authentication
         method = message.get("method")
-        message_id = message.get("id")  # Don't default to 0 - keep None if not provided
+        message_id = message.get("id")
+        
+        # Remove the auth token from params before processing (it's not part of the actual parameters)
+        if "_claudeMcpAuthToken" in params:
+            params = {k: v for k, v in params.items() if k != "_claudeMcpAuthToken"}
+            message["params"] = params
         
         print(f"INFO:__main__:Handling method: {method} (id: {message_id})")
         
@@ -550,20 +556,38 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
-                        "tools": {}
+                        "tools": {
+                            "listChanged": True
+                        },
+                        "resources": {},
+                        "prompts": {},
+                        "logging": {}
                     },
                     "serverInfo": {
-                        "name": "General Search",
+                        "name": "General MCP Server",
                         "version": "1.0.0"
+                    },
+                    "authentication": {
+                        "status": "authenticated" if (auth_token or claude_auth_token) else "unauthenticated",
+                        "method": "oauth2"
                     }
                 }
             }
         
         elif method == "tools/list":
+            # For authenticated requests, return tools as available
+            tools_response = TOOLS.copy()
+            
+            # Add tool status if authenticated
+            if auth_token or claude_auth_token:
+                for tool in tools_response:
+                    tool["enabled"] = True
+                    tool["authenticated"] = True
+            
             return {
                 "jsonrpc": "2.0",
                 "id": message_id,
-                "result": {"tools": TOOLS}
+                "result": {"tools": tools_response}
             }
         
         elif method == "resources/list":
