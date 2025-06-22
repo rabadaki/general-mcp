@@ -2031,5 +2031,5 @@ if __name__ == "__main__":
     print(f"🏥 Health check: http://0.0.0.0:{port}/health")
     print(f"🔥 CACHE BUSTER: {datetime.now().isoformat()}")
     print("🔥 AUTO-DEPLOY TEST - Railway should see this!")
-    print("✅ Auto-deploy verification - " + datetime.now().strftime("%H:%M:%S"))
+    print("✅ Auto-deploy TEST #2 - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     uvicorn.run(app, host="0.0.0.0", port=port)
