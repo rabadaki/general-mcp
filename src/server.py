@@ -774,16 +774,16 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
         
         elif method == "tools/list":
             print(f"📋 Processing tools/list request via /message (authenticated: {bool(auth_token or claude_auth_token)})")
-            # For authenticated requests, return tools as available
+            # Always return tools, but mark their availability based on authentication
             tools_response = TOOLS.copy()
             
-            # Add tool status if authenticated
-            if auth_token or claude_auth_token:
-                for tool in tools_response:
-                    tool["enabled"] = True
-                    tool["authenticated"] = True
+            # Mark tool availability based on authentication
+            is_authenticated = bool(auth_token or claude_auth_token)
+            for tool in tools_response:
+                tool["enabled"] = is_authenticated
+                tool["authenticated"] = is_authenticated
             
-            print(f"✅ Returning {len(tools_response)} tools via /message")
+            print(f"✅ Returning {len(tools_response)} tools via /message (enabled: {is_authenticated})")
             return {
                 "jsonrpc": "2.0",
                 "id": message_id,
