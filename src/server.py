@@ -29,7 +29,7 @@ Usage: python server.py (runs on http://localhost:8000)
 from fastapi import FastAPI, HTTPException, Response, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.base import BaseHTTPMiddleware
+# from fastapi.middleware.base import BaseHTTPMiddleware  # Not needed currently
 import uvicorn
 
 # Standard libraries
