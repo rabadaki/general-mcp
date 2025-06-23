@@ -910,28 +910,43 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"❌ WebSocket error: {e}")
         await websocket.close()
 
-@app.get("/sse")
-async def handle_sse():
+@app.post("/sse")
+async def handle_sse_post(message: dict, request: Request, authorization: str = None):
+    """Handle MCP messages via POST to SSE endpoint."""
+    print(f"📨 SSE POST received: {message}")
+    print(f"🔐 SSE Auth: {authorization}")
+    
+    # Extract Bearer token
+    if authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.replace("Bearer ", "")
+        print(f"✅ Valid Bearer token for SSE: {auth_token[:16]}...")
+        
+        # Add auth token to message params for processing
+        if "params" not in message:
+            message["params"] = {}
+        message["params"]["_claudeMcpAuthToken"] = auth_token
+    
+    # Process the message using internal handler
+    return await handle_mcp_message_internal(message)
+
+@app.get("/sse")  
+async def handle_sse_get(request: Request, authorization: str = None):
     """Handle Server-Sent Events for MCP communication."""
+    print(f"🌊 SSE GET connection from {request.client.host if request.client else 'unknown'}")
+    print(f"🔐 SSE Auth: {authorization}")
+    
     async def event_stream():
         try:
-            # Send immediate ping
-            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\"}\n\n"
+            # Send server info first
+            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"server_info\", \"result\": {\"name\": \"General MCP Server\", \"version\": \"1.0.0\"}}\n\n"
             
-            # Test rapid pings
-            await asyncio.sleep(1)
-            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": 1}\n\n"
+            # Send capabilities
+            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"capabilities\", \"result\": {\"tools\": true, \"resources\": true, \"prompts\": true}}\n\n"
             
-            await asyncio.sleep(1) 
-            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": 2}\n\n"
-            
-            await asyncio.sleep(1)
-            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"test\": 3}\n\n"
-            
-            # Keep connection alive with longer intervals
+            # Keep connection alive
             while True:
-                await asyncio.sleep(10)  # Shorter for debugging
-                yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"keepalive\"}\n\n"
+                await asyncio.sleep(30)  # Ping every 30 seconds
+                yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"timestamp\": \"" + str(asyncio.get_event_loop().time()) + "\"}\n\n"
                 
         except Exception as e:
             print(f"SSE Error: {e}")
@@ -944,7 +959,7 @@ async def handle_sse():
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
             "X-Accel-Buffering": "no",
         }
     )
