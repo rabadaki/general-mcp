@@ -1073,6 +1073,7 @@ async def handle_mcp_get(request: Request):
                 tool["authenticated"] = is_authenticated
             
             print(f"📋 Sending tools list via SSE stream (authenticated: {is_authenticated}, tools: {len(tools_response)})")
+            import json
             tools_event = {
                 "jsonrpc": "2.0",
                 "method": "notifications/tools/listChanged",
