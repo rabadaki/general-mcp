@@ -26,7 +26,7 @@ Usage: python server.py (runs on http://localhost:8000)
 """
 
 # MCP and web framework
-from fastapi import FastAPI, HTTPException, Response, Request
+from fastapi import FastAPI, HTTPException, Response, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -519,6 +519,167 @@ TOOLS = [
 # MCP HTTP ENDPOINTS
 # ============================================================================
 
+async def handle_mcp_message_internal(message: dict):
+    """Internal MCP message handler for both HTTP and WebSocket."""
+    # Extract authentication token from params
+    params = message.get("params", {})
+    claude_auth_token = params.get("_claudeMcpAuthToken")
+    
+    # Remove the auth token from params before processing
+    if "_claudeMcpAuthToken" in params:
+        params = {k: v for k, v in params.items() if k != "_claudeMcpAuthToken"}
+        message["params"] = params
+    
+    method = message.get("method")
+    message_id = message.get("id")
+    
+    print(f"INFO:__main__:Handling method: {method} (id: {message_id})")
+    
+    # If this is a notification (no ID), don't send a response
+    if message_id is None:
+        print(f"INFO:__main__:Notification received for {method}, not sending response")
+        return {"__notification__": True}
+    
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {
+                        "listChanged": True,
+                        "supportsProgress": False
+                    },
+                    "resources": {
+                        "subscribe": False,
+                        "listChanged": False
+                    },
+                    "prompts": {
+                        "listChanged": False
+                    },
+                    "logging": {}
+                },
+                "serverInfo": {
+                    "name": "General MCP Server",
+                    "version": "1.0.0"
+                },
+                "authentication": {
+                    "status": "authenticated" if claude_auth_token else "unauthenticated",
+                    "method": "oauth2"
+                }
+            }
+        }
+    
+    elif method == "tools/list":
+        # For authenticated requests, return tools as available
+        tools_response = TOOLS.copy()
+        
+        # Add tool status if authenticated
+        if claude_auth_token:
+            for tool in tools_response:
+                tool["enabled"] = True
+                tool["authenticated"] = True
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {"tools": tools_response}
+        }
+    
+    elif method == "resources/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {"resources": []}
+        }
+    
+    elif method == "prompts/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {"prompts": []}
+        }
+    
+    elif method == "tools/call":
+        tool_name = message.get("params", {}).get("name")
+        arguments = message.get("params", {}).get("arguments", {})
+        
+        print(f"INFO:__main__:Calling tool: {tool_name} with args: {arguments}")
+        
+        # Call the appropriate tool function
+        result = None
+        if tool_name == "search_reddit":
+            result = await search_reddit(**arguments)
+        elif tool_name == "get_subreddit_posts":
+            result = await get_subreddit_posts(**arguments)
+        elif tool_name == "get_reddit_comments":
+            result = await get_reddit_comments(**arguments)
+        elif tool_name == "search_youtube":
+            result = await search_youtube(**arguments)
+        elif tool_name == "get_youtube_trending":
+            result = await get_youtube_trending(**arguments)
+        elif tool_name == "search_twitter":
+            result = await search_twitter(**arguments)
+        elif tool_name == "get_user_tweets":
+            result = await get_user_tweets(**arguments)
+        elif tool_name == "get_twitter_profile":
+            result = await get_twitter_profile(**arguments)
+        elif tool_name == "search_tiktok":
+            result = await search_tiktok(**arguments)
+        elif tool_name == "get_tiktok_user_videos":
+            result = await get_tiktok_user_videos(**arguments)
+        elif tool_name == "search_instagram":
+            result = await search_instagram(**arguments)
+        elif tool_name == "get_instagram_profile":
+            result = await get_instagram_profile(**arguments)
+        elif tool_name == "search_perplexity":
+            result = await search_perplexity(**arguments)
+        elif tool_name == "search_google_trends":
+            result = await search_google_trends(**arguments)
+        elif tool_name == "compare_google_trends":
+            result = await compare_google_trends(**arguments)
+        elif tool_name == "get_api_usage_stats":
+            result = await get_api_usage_stats(**arguments)
+        elif tool_name == "search_serp":
+            result = await search_serp(**arguments)
+        elif tool_name == "keyword_research":
+            result = await keyword_research(**arguments)
+        elif tool_name == "competitor_analysis":
+            result = await competitor_analysis(**arguments)
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Unknown tool: {tool_name}"
+                }
+            }
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": result
+                    }
+                ]
+            }
+        }
+    
+    else:
+        return {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "error": {
+                "code": -32601,
+                "message": f"Unknown method: {method}"
+            }
+        }
+
 @app.post("/message")
 async def handle_mcp_message(message: dict, request: Request, authorization: str = None):
     """Handle MCP protocol messages over HTTP."""
@@ -706,6 +867,48 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 "message": f"Internal error: {str(e)}"
             }
         }
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for MCP communication."""
+    await websocket.accept()
+    print(f"🔌 WebSocket connected from {websocket.client}")
+    
+    try:
+        # Send initialization message
+        await websocket.send_text(json.dumps({
+            "jsonrpc": "2.0",
+            "method": "ping",
+            "timestamp": asyncio.get_event_loop().time()
+        }))
+        
+        while True:
+            # Wait for incoming messages
+            data = await websocket.receive_text()
+            print(f"📨 WebSocket received: {data}")
+            
+            try:
+                message = json.loads(data)
+                
+                # Handle the message using the same logic as HTTP endpoint
+                response = await handle_mcp_message_internal(message)
+                
+                # Send response back via WebSocket
+                await websocket.send_text(json.dumps(response))
+                
+            except json.JSONDecodeError as e:
+                error_response = {
+                    "jsonrpc": "2.0", 
+                    "error": {"code": -32700, "message": "Parse error"},
+                    "id": None
+                }
+                await websocket.send_text(json.dumps(error_response))
+                
+    except WebSocketDisconnect:
+        print(f"🔌 WebSocket disconnected from {websocket.client}")
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+        await websocket.close()
 
 @app.get("/sse")
 async def handle_sse():
