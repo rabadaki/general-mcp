@@ -560,10 +560,16 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
                         "tools": {
-                            "listChanged": True
+                            "listChanged": True,
+                            "supportsProgress": False
                         },
-                        "resources": {},
-                        "prompts": {},
+                        "resources": {
+                            "subscribe": False,
+                            "listChanged": False
+                        },
+                        "prompts": {
+                            "listChanged": False
+                        },
                         "logging": {}
                     },
                     "serverInfo": {
@@ -828,6 +834,34 @@ async def oauth_metadata():
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
         "code_challenge_methods_supported": ["S256"]
+    }
+
+@app.get("/.well-known/mcp")
+async def mcp_metadata():
+    """MCP server discovery metadata."""
+    return {
+        "server": {
+            "name": "General MCP Server",
+            "version": "1.0.0"
+        },
+        "protocol": {
+            "version": "2024-11-05"
+        },
+        "capabilities": {
+            "tools": True,
+            "resources": True,
+            "prompts": True
+        },
+        "endpoints": {
+            "message": "https://general-mcp-production.up.railway.app/message",
+            "sse": "https://general-mcp-production.up.railway.app/sse"
+        },
+        "authentication": {
+            "oauth2": {
+                "authorization_url": "https://general-mcp-production.up.railway.app/authorize",
+                "token_url": "https://general-mcp-production.up.railway.app/token"
+            }
+        }
     }
 
 @app.post("/register")
