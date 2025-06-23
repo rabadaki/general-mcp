@@ -602,6 +602,7 @@ async def handle_mcp_message_internal(message: dict):
         }
     
     elif method == "resources/list":
+        print(f"📁 Processing resources/list request (authenticated: {bool(claude_auth_token)})")
         return {
             "jsonrpc": "2.0",
             "id": message_id,
@@ -609,6 +610,7 @@ async def handle_mcp_message_internal(message: dict):
         }
     
     elif method == "prompts/list":
+        print(f"💬 Processing prompts/list request (authenticated: {bool(claude_auth_token)})")
         return {
             "jsonrpc": "2.0",
             "id": message_id,
@@ -789,6 +791,7 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
             }
         
         elif method == "resources/list":
+            print(f"📁 Processing resources/list request via /message (authenticated: {bool(auth_token or claude_auth_token)})")
             return {
                 "jsonrpc": "2.0",
                 "id": message_id,
@@ -796,6 +799,7 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
             }
         
         elif method == "prompts/list":
+            print(f"💬 Processing prompts/list request via /message (authenticated: {bool(auth_token or claude_auth_token)})")
             return {
                 "jsonrpc": "2.0",
                 "id": message_id,
