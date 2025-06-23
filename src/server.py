@@ -629,10 +629,10 @@ async def handle_mcp_message_internal(message: dict):
                     "name": "General MCP Server",
                     "version": "1.0.0"
                 },
-                "authentication": {
-                    "status": "authenticated" if claude_auth_token else "required",
-                    "method": "oauth2"
-                }
+                                    "authentication": {
+                        "status": "authenticated" if claude_auth_token else "optional",
+                        "method": "bearer"
+                    }
             }
         }
     
@@ -827,8 +827,8 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                         "version": "1.0.0"
                     },
                     "authentication": {
-                        "status": "authenticated" if (auth_token or claude_auth_token) else ("required" if "Claude AI Web" in client_type else "unauthenticated"),
-                        **({"method": "oauth2"} if "Claude AI Web" in client_type and not (auth_token or claude_auth_token) else {})
+                        "status": "authenticated" if (auth_token or claude_auth_token) else "optional",
+                        "method": "bearer"
                     }
                 }
             }
