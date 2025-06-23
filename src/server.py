@@ -523,6 +523,60 @@ TOOLS = [
             },
             "required": ["domain"]
         }
+    },
+    {
+        "name": "lighthouse_audit",
+        "description": "Run a comprehensive Lighthouse audit on a website.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Website URL to audit"
+                },
+                "strategy": {
+                    "type": "string",
+                    "description": "Audit strategy (desktop, mobile)",
+                    "default": "desktop"
+                }
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "lighthouse_performance_score",
+        "description": "Get just the performance score for a website.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Website URL to check"
+                }
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "lighthouse_bulk_audit",
+        "description": "Run Lighthouse audits on multiple URLs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "urls": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "pattern": "^https?://.*",
+                        "minLength": 7
+                    },
+                    "description": "List of URLs to audit (max 5)",
+                    "maxItems": 5,
+                    "minItems": 1
+                }
+            },
+            "required": ["urls"]
+        }
     }
 ]
 
@@ -664,6 +718,12 @@ async def handle_mcp_message_internal(message: dict):
             result = await keyword_research(**arguments)
         elif tool_name == "competitor_analysis":
             result = await competitor_analysis(**arguments)
+        elif tool_name == "lighthouse_audit":
+            result = await lighthouse_audit(**arguments)
+        elif tool_name == "lighthouse_performance_score":
+            result = await lighthouse_performance_score(**arguments)
+        elif tool_name == "lighthouse_bulk_audit":
+            result = await lighthouse_bulk_audit(**arguments)
         else:
             return {
                 "jsonrpc": "2.0",
@@ -853,6 +913,12 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 result = await keyword_research(**arguments)
             elif tool_name == "competitor_analysis":
                 result = await competitor_analysis(**arguments)
+            elif tool_name == "lighthouse_audit":
+                result = await lighthouse_audit(**arguments)
+            elif tool_name == "lighthouse_performance_score":
+                result = await lighthouse_performance_score(**arguments)
+            elif tool_name == "lighthouse_bulk_audit":
+                result = await lighthouse_bulk_audit(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -1008,7 +1074,7 @@ async def handle_mcp_post(message: dict, request: Request):
 
 @app.get("/mcp")  
 async def handle_mcp_get(request: Request):
-    """Handle MCP communication with optional SSE streaming."""
+    """Handle SSE streaming for MCP notifications only."""
     # Detect client type
     user_agent = request.headers.get("user-agent", "")
     
@@ -1019,55 +1085,26 @@ async def handle_mcp_get(request: Request):
     else:
         client_type = f"❓ Unknown"
     
-    print(f"🌊 MCP GET connection from {client_type} ({request.client.host if request.client else 'unknown'})")
+    print(f"🌊 SSE connection from {client_type} ({request.client.host if request.client else 'unknown'})")
     
     # Extract Bearer token from Authorization header
     authorization = request.headers.get("authorization") or request.headers.get("Authorization")
-    print(f"🔐 MCP Auth: {authorization}")
+    print(f"🔐 SSE Auth: {authorization}")
     
-    # Check if this is a tools/list request via query params or path
-    query_params = dict(request.query_params)
-    print(f"📋 Query params: {query_params}")
+    # Check if Accept header requests SSE
+    accept_header = request.headers.get("accept", "")
+    print(f"📋 Headers: {dict(request.headers)}")
     
-    # Handle direct MCP method requests
-    if "method" in query_params:
-        method = query_params.get("method")
-        print(f"🔧 Handling {method} via GET /mcp")
-        
-        if method == "tools/list":
-            # Extract auth token
-            auth_token = None
-            if authorization and authorization.startswith("Bearer "):
-                auth_token = authorization.replace("Bearer ", "")
-            
-            print(f"📋 Processing tools/list request via GET /mcp (authenticated: {bool(auth_token)})")
-            # Always return tools, but mark their availability based on authentication
-            tools_response = TOOLS.copy()
-            
-            # Mark tool availability based on authentication
-            is_authenticated = bool(auth_token)
-            for tool in tools_response:
-                tool["enabled"] = is_authenticated
-                tool["authenticated"] = is_authenticated
-            
-            print(f"✅ Returning {len(tools_response)} tools via GET /mcp (enabled: {is_authenticated})")
-            return {"tools": tools_response}
-    
+    # SSE stream for server-initiated notifications only
     async def event_stream():
         try:
-            # Send server info first
-            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"server_info\", \"result\": {\"name\": \"General MCP Server\", \"version\": \"1.0.0\"}}\n\n"
-            
-            # Send capabilities
-            yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"capabilities\", \"result\": {\"tools\": true, \"resources\": true, \"prompts\": true}}\n\n"
-            
-            # Keep connection alive
+            # Keep connection alive with periodic pings
             while True:
                 await asyncio.sleep(30)  # Ping every 30 seconds
-                yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"timestamp\": \"" + str(asyncio.get_event_loop().time()) + "\"}\n\n"
+                yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"timestamp\": {int(time.time())}}}\n\n"
                 
         except Exception as e:
-            print(f"MCP Stream Error: {e}")
+            print(f"SSE Stream Error: {e}")
             yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
     
     return StreamingResponse(
@@ -2607,6 +2644,121 @@ For now, please try again later or consider using one of the alternative service
         print(f"Error in compare_google_trends: {str(e)}")
         # log_api_usage("Google Trends", "compare", len(terms), 0, 0.0)
         return f"❌ Error comparing trends: {str(e)}"
+
+# ============================================================================
+# LIGHTHOUSE TOOLS 
+# ============================================================================
+
+async def lighthouse_audit(url: str, strategy: str = "desktop") -> str:
+    """Run a comprehensive Lighthouse audit on a website."""
+    try:
+        from googleapiclient.discovery import build
+        
+        # Use existing YouTube API key for PageSpeed Insights
+        service = build('pagespeedonline', 'v5', developerKey=YOUTUBE_API_KEY)
+        
+        # Make request to PageSpeed Insights API (strategy must be uppercase)
+        strategy_upper = strategy.upper() if strategy.lower() == 'desktop' else 'MOBILE'
+        result = service.pagespeedapi().runpagespeed(
+            url=url,
+            strategy=strategy_upper,
+            category=['PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO']
+        ).execute()
+        
+        # Extract Lighthouse data
+        lighthouse_result = result.get('lighthouseResult', {})
+        categories = lighthouse_result.get('categories', {})
+        
+        # Format scores (0-1 scale converted to 0-100)
+        performance = int(categories.get('performance', {}).get('score', 0) * 100)
+        accessibility = int(categories.get('accessibility', {}).get('score', 0) * 100)
+        best_practices = int(categories.get('best-practices', {}).get('score', 0) * 100)
+        seo = int(categories.get('seo', {}).get('score', 0) * 100)
+        
+        # Get key metrics
+        audits = lighthouse_result.get('audits', {})
+        fcp = audits.get('first-contentful-paint', {}).get('displayValue', 'N/A')
+        lcp = audits.get('largest-contentful-paint', {}).get('displayValue', 'N/A')
+        cls = audits.get('cumulative-layout-shift', {}).get('displayValue', 'N/A')
+        
+        # Format response
+        response = f"🚀 **Lighthouse Audit for {url}**\n"
+        response += f"📱 Strategy: {strategy.title()}\n\n"
+        response += f"📊 **Core Scores:**\n"
+        response += f"⚡ Performance: {performance}/100\n"
+        response += f"♿ Accessibility: {accessibility}/100\n"
+        response += f"✅ Best Practices: {best_practices}/100\n"
+        response += f"🔍 SEO: {seo}/100\n\n"
+        response += f"⏱️ **Key Metrics:**\n"
+        response += f"• First Contentful Paint: {fcp}\n"
+        response += f"• Largest Contentful Paint: {lcp}\n"
+        response += f"• Cumulative Layout Shift: {cls}\n"
+        
+        return response
+        
+    except ImportError:
+        return "❌ google-api-python-client not installed. Run: pip install google-api-python-client"
+    except Exception as e:
+        return f"❌ Lighthouse audit failed for {url}: {str(e)}"
+
+async def lighthouse_performance_score(url: str) -> str:
+    """Get just the performance score for a website."""
+    try:
+        from googleapiclient.discovery import build
+        
+        service = build('pagespeedonline', 'v5', developerKey=YOUTUBE_API_KEY)
+        
+        result = service.pagespeedapi().runpagespeed(
+            url=url,
+            strategy='DESKTOP',
+            category=['PERFORMANCE']
+        ).execute()
+        
+        lighthouse_result = result.get('lighthouseResult', {})
+        categories = lighthouse_result.get('categories', {})
+        performance_score = int(categories.get('performance', {}).get('score', 0) * 100)
+        
+        # Get FCP for context
+        audits = lighthouse_result.get('audits', {})
+        fcp = audits.get('first-contentful-paint', {}).get('displayValue', 'N/A')
+        
+        return f"⚡ **Performance Score for {url}**\n📊 Score: {performance_score}/100\n⏱️ First Paint: {fcp}"
+        
+    except Exception as e:
+        return f"❌ Performance check failed for {url}: {str(e)}"
+
+async def lighthouse_bulk_audit(urls: list) -> str:
+    """Run Lighthouse audits on multiple URLs."""
+    if len(urls) > 5:
+        urls = urls[:5]  # Limit to prevent quota issues
+    
+    if not urls:
+        return "❌ No URLs provided for bulk audit"
+    
+    results = []
+    for url in urls:
+        try:
+            from googleapiclient.discovery import build
+            
+            service = build('pagespeedonline', 'v5', developerKey=YOUTUBE_API_KEY)
+            
+            result = service.pagespeedapi().runpagespeed(
+                url=url,
+                strategy='DESKTOP',
+                category=['PERFORMANCE']
+            ).execute()
+            
+            lighthouse_result = result.get('lighthouseResult', {})
+            categories = lighthouse_result.get('categories', {})
+            performance_score = int(categories.get('performance', {}).get('score', 0) * 100)
+            
+            results.append(f"🌐 **{url}**\n⚡ Performance: {performance_score}/100")
+            
+        except Exception as e:
+            results.append(f"🌐 **{url}**\n❌ Failed: {str(e)[:50]}...")
+    
+    header = f"📊 **Bulk Lighthouse Audit Results ({len(results)} sites)**\n\n"
+    return header + "\n\n".join(results)
 
 # ============================================================================
 # MAIN APPLICATION
