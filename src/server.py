@@ -913,21 +913,49 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/sse")
 async def handle_sse_post(message: dict, request: Request, authorization: str = None):
     """Handle MCP messages via POST to SSE endpoint."""
-    print(f"📨 SSE POST received: {message}")
-    print(f"🔐 SSE Auth: {authorization}")
-    
-    # Extract Bearer token
-    if authorization and authorization.startswith("Bearer "):
-        auth_token = authorization.replace("Bearer ", "")
-        print(f"✅ Valid Bearer token for SSE: {auth_token[:16]}...")
+    try:
+        print(f"📨 SSE POST received from {request.client.host if request.client else 'unknown'}: {message}")
+        print(f"🔐 SSE Auth: {authorization}")
         
-        # Add auth token to message params for processing
-        if "params" not in message:
-            message["params"] = {}
-        message["params"]["_claudeMcpAuthToken"] = auth_token
-    
-    # Process the message using internal handler
-    return await handle_mcp_message_internal(message)
+        # Extract Bearer token
+        if authorization and authorization.startswith("Bearer "):
+            auth_token = authorization.replace("Bearer ", "")
+            print(f"✅ Valid Bearer token for SSE: {auth_token[:16]}...")
+            
+            # Add auth token to message params for processing
+            if "params" not in message:
+                message["params"] = {}
+            message["params"]["_claudeMcpAuthToken"] = auth_token
+        
+        # Process the message using internal handler with timeout
+        import asyncio
+        result = await asyncio.wait_for(
+            handle_mcp_message_internal(message), 
+            timeout=30.0  # 30 second timeout
+        )
+        print(f"✅ SSE POST response: {result}")
+        return result
+        
+    except asyncio.TimeoutError:
+        print(f"⏰ SSE POST timeout for method: {message.get('method')}")
+        return {
+            "jsonrpc": "2.0",
+            "id": message.get("id"),
+            "error": {
+                "code": -32001,
+                "message": "Request timed out"
+            }
+        }
+    except Exception as e:
+        print(f"❌ SSE POST error: {str(e)}")
+        return {
+            "jsonrpc": "2.0",
+            "id": message.get("id"),
+            "error": {
+                "code": -32603,
+                "message": f"Internal error: {str(e)}"
+            }
+        }
 
 @app.get("/sse")  
 async def handle_sse_get(request: Request, authorization: str = None):
@@ -1071,7 +1099,7 @@ async def mcp_metadata():
             "prompts": True
         },
         "endpoints": {
-            "message": "https://general-mcp-production.up.railway.app/message",
+            "message": "https://general-mcp-production.up.railway.app/sse",
             "sse": "https://general-mcp-production.up.railway.app/sse"
         },
         "authentication": {
@@ -1144,7 +1172,7 @@ async def oauth_token(request: Request):
         "token_type": "Bearer", 
         "expires_in": 3600,
         "scope": "mcp:read mcp:write",
-        "mcp_endpoint": "https://general-mcp-production.up.railway.app/message",
+        "mcp_endpoint": "https://general-mcp-production.up.railway.app/sse",
         "server_info": {
             "name": "General MCP Server",
             "version": "1.0.0"
