@@ -1024,6 +1024,34 @@ async def handle_sse_get(request: Request):
     authorization = request.headers.get("authorization") or request.headers.get("Authorization")
     print(f"🔐 SSE Auth: {authorization}")
     
+    # Check if this is a tools/list request via query params or path
+    query_params = dict(request.query_params)
+    print(f"📋 Query params: {query_params}")
+    
+    # Handle direct MCP method requests
+    if "method" in query_params:
+        method = query_params.get("method")
+        print(f"🔧 Handling {method} via GET /sse")
+        
+        if method == "tools/list":
+            # Extract auth token
+            auth_token = None
+            if authorization and authorization.startswith("Bearer "):
+                auth_token = authorization.replace("Bearer ", "")
+            
+            print(f"📋 Processing tools/list request via GET /sse (authenticated: {bool(auth_token)})")
+            # Always return tools, but mark their availability based on authentication
+            tools_response = TOOLS.copy()
+            
+            # Mark tool availability based on authentication
+            is_authenticated = bool(auth_token)
+            for tool in tools_response:
+                tool["enabled"] = is_authenticated
+                tool["authenticated"] = is_authenticated
+            
+            print(f"✅ Returning {len(tools_response)} tools via GET /sse (enabled: {is_authenticated})")
+            return {"tools": tools_response}
+    
     async def event_stream():
         try:
             # Send server info first
