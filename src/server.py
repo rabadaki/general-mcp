@@ -695,8 +695,20 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
         params = message.get("params", {})
         claude_auth_token = params.get("_claudeMcpAuthToken")
         
+        # Detect client type
+        user_agent = request.headers.get("user-agent", "")
+        client_info = message.get("params", {}).get("clientInfo", {})
+        client_name = client_info.get("name", "")
+        
+        if "node" in user_agent or client_name == "claude-desktop":
+            client_type = "🖥️ Claude Desktop"
+        elif "python-httpx" in user_agent and client_name == "claude-ai":
+            client_type = "🌐 Claude AI Web"
+        else:
+            client_type = f"❓ Unknown ({client_name})"
+        
         # Log all incoming requests for debugging (but hide sensitive tokens)
-        print(f"📥 Incoming request from {request.client.host if request.client else 'unknown'}")
+        print(f"📥 HTTP request from {client_type} ({request.client.host if request.client else 'unknown'})")
         print(f"🔐 Auth token present: {bool(auth_token or claude_auth_token)}")
         
         # For tool calls, we need to validate authentication
@@ -915,10 +927,26 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 @app.post("/sse")
-async def handle_sse_post(message: dict, request: Request, authorization: str = None):
+async def handle_sse_post(message: dict, request: Request):
     """Handle MCP messages via POST to SSE endpoint."""
     try:
-        print(f"📨 SSE POST received from {request.client.host if request.client else 'unknown'}: {message}")
+        # Detect client type
+        user_agent = request.headers.get("user-agent", "")
+        client_info = message.get("params", {}).get("clientInfo", {})
+        client_name = client_info.get("name", "")
+        
+        # Determine if this is Claude Desktop or Claude AI Web
+        if "python-httpx" in user_agent and client_name == "claude-ai":
+            client_type = "🌐 Claude AI Web"
+        elif "node" in user_agent or client_name == "claude-desktop":
+            client_type = "🖥️ Claude Desktop"
+        else:
+            client_type = f"❓ Unknown ({client_name})"
+        
+        print(f"📨 SSE POST from {client_type} ({request.client.host if request.client else 'unknown'}): {message}")
+        
+        # Extract Bearer token from Authorization header
+        authorization = request.headers.get("authorization") or request.headers.get("Authorization")
         print(f"🔐 SSE Auth: {authorization}")
         
         # Extract Bearer token
@@ -962,9 +990,22 @@ async def handle_sse_post(message: dict, request: Request, authorization: str = 
         }
 
 @app.get("/sse")  
-async def handle_sse_get(request: Request, authorization: str = None):
+async def handle_sse_get(request: Request):
     """Handle Server-Sent Events for MCP communication."""
-    print(f"🌊 SSE GET connection from {request.client.host if request.client else 'unknown'}")
+    # Detect client type
+    user_agent = request.headers.get("user-agent", "")
+    
+    if "python-httpx" in user_agent:
+        client_type = "🌐 Claude AI Web"
+    elif "node" in user_agent:
+        client_type = "🖥️ Claude Desktop"
+    else:
+        client_type = f"❓ Unknown"
+    
+    print(f"🌊 SSE GET connection from {client_type} ({request.client.host if request.client else 'unknown'})")
+    
+    # Extract Bearer token from Authorization header
+    authorization = request.headers.get("authorization") or request.headers.get("Authorization")
     print(f"🔐 SSE Auth: {authorization}")
     
     async def event_stream():
