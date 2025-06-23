@@ -58,16 +58,26 @@ app = FastAPI(title="General MCP Server", version="1.0.0")
 # Add middleware to log all requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    start_time = time.time()
     print(f"🌐 {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
     if request.url.path not in ["/health"]:  # Don't spam logs with health checks only
         print(f"📋 Query params: {dict(request.query_params)}")
         print(f"📋 Headers: {dict(request.headers)}")
-    response = await call_next(request)
-    if response.status_code == 404:
-        print(f"❌ 404 Not Found: {request.method} {request.url.path}")
-    elif response.status_code >= 400:
-        print(f"❌ {response.status_code} Error: {request.method} {request.url.path}")
-    return response
+    
+    try:
+        response = await call_next(request)
+        duration = time.time() - start_time
+        print(f"⏱️ Request {request.method} {request.url.path} completed in {duration:.3f}s with status {response.status_code}")
+        
+        if response.status_code == 404:
+            print(f"❌ 404 Not Found: {request.method} {request.url.path}")
+        elif response.status_code >= 400:
+            print(f"❌ {response.status_code} Error: {request.method} {request.url.path}")
+        return response
+    except Exception as e:
+        duration = time.time() - start_time
+        print(f"💥 Request {request.method} {request.url.path} failed after {duration:.3f}s: {str(e)}")
+        raise
 
 # Add CORS middleware
 app.add_middleware(
@@ -573,6 +583,8 @@ async def handle_mcp_message_internal(message: dict):
     
     elif method == "tools/list":
         print(f"📋 Processing tools/list request (authenticated: {bool(claude_auth_token)})")
+        print(f"⏱️ Starting tools/list response preparation...")
+        
         # For authenticated requests, return tools as available
         tools_response = TOOLS.copy()
         
@@ -582,7 +594,7 @@ async def handle_mcp_message_internal(message: dict):
                 tool["enabled"] = True
                 tool["authenticated"] = True
         
-        print(f"✅ Returning {len(tools_response)} tools")
+        print(f"✅ Returning {len(tools_response)} tools (response size: ~{len(str(tools_response))} chars)")
         return {
             "jsonrpc": "2.0",
             "id": message_id,
