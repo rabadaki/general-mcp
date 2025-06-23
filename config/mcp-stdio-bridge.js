@@ -2,7 +2,7 @@
 
 const readline = require('readline');
 
-const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://general-mcp-production.up.railway.app/message';
+const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://general-mcp-production.up.railway.app/mcp';
 
 // Use built-in fetch if available (Node 18+), otherwise use https module
 let fetchFunction;

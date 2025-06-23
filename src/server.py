@@ -942,9 +942,9 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"❌ WebSocket error: {e}")
         await websocket.close()
 
-@app.post("/sse")
-async def handle_sse_post(message: dict, request: Request):
-    """Handle MCP messages via POST to SSE endpoint."""
+@app.post("/mcp")
+async def handle_mcp_post(message: dict, request: Request):
+    """Handle MCP messages via POST to MCP endpoint."""
     try:
         # Detect client type
         user_agent = request.headers.get("user-agent", "")
@@ -1005,9 +1005,9 @@ async def handle_sse_post(message: dict, request: Request):
             }
         }
 
-@app.get("/sse")  
-async def handle_sse_get(request: Request):
-    """Handle Server-Sent Events for MCP communication."""
+@app.get("/mcp")  
+async def handle_mcp_get(request: Request):
+    """Handle MCP communication with optional SSE streaming."""
     # Detect client type
     user_agent = request.headers.get("user-agent", "")
     
@@ -1018,11 +1018,11 @@ async def handle_sse_get(request: Request):
     else:
         client_type = f"❓ Unknown"
     
-    print(f"🌊 SSE GET connection from {client_type} ({request.client.host if request.client else 'unknown'})")
+    print(f"🌊 MCP GET connection from {client_type} ({request.client.host if request.client else 'unknown'})")
     
     # Extract Bearer token from Authorization header
     authorization = request.headers.get("authorization") or request.headers.get("Authorization")
-    print(f"🔐 SSE Auth: {authorization}")
+    print(f"🔐 MCP Auth: {authorization}")
     
     # Check if this is a tools/list request via query params or path
     query_params = dict(request.query_params)
@@ -1031,7 +1031,7 @@ async def handle_sse_get(request: Request):
     # Handle direct MCP method requests
     if "method" in query_params:
         method = query_params.get("method")
-        print(f"🔧 Handling {method} via GET /sse")
+        print(f"🔧 Handling {method} via GET /mcp")
         
         if method == "tools/list":
             # Extract auth token
@@ -1039,7 +1039,7 @@ async def handle_sse_get(request: Request):
             if authorization and authorization.startswith("Bearer "):
                 auth_token = authorization.replace("Bearer ", "")
             
-            print(f"📋 Processing tools/list request via GET /sse (authenticated: {bool(auth_token)})")
+            print(f"📋 Processing tools/list request via GET /mcp (authenticated: {bool(auth_token)})")
             # Always return tools, but mark their availability based on authentication
             tools_response = TOOLS.copy()
             
@@ -1049,7 +1049,7 @@ async def handle_sse_get(request: Request):
                 tool["enabled"] = is_authenticated
                 tool["authenticated"] = is_authenticated
             
-            print(f"✅ Returning {len(tools_response)} tools via GET /sse (enabled: {is_authenticated})")
+            print(f"✅ Returning {len(tools_response)} tools via GET /mcp (enabled: {is_authenticated})")
             return {"tools": tools_response}
     
     async def event_stream():
@@ -1188,8 +1188,8 @@ async def mcp_metadata():
             "prompts": True
         },
         "endpoints": {
-            "message": "https://general-mcp-production.up.railway.app/sse",
-            "sse": "https://general-mcp-production.up.railway.app/sse"
+            "message": "https://general-mcp-production.up.railway.app/mcp",
+            "sse": "https://general-mcp-production.up.railway.app/mcp"
         },
         "authentication": {
             "oauth2": {
@@ -2614,8 +2614,8 @@ For now, please try again later or consider using one of the alternative service
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     print(f"🚀 NEW FastAPI MCP Server v2.0 starting on port {port}")
-    print(f"📡 MCP endpoint: http://0.0.0.0:{port}/message")
-    print(f"🌊 SSE endpoint: http://0.0.0.0:{port}/sse") 
+    print(f"📡 MCP endpoint: http://0.0.0.0:{port}/mcp")
+    print(f"🌊 SSE streaming: http://0.0.0.0:{port}/mcp (GET)") 
     print(f"🏥 Health check: http://0.0.0.0:{port}/health")
     print(f"🔥 CACHE BUSTER: {datetime.now().isoformat()}")
     print("🔥 AUTO-DEPLOY TEST - Railway should see this!")
