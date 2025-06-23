@@ -2024,7 +2024,7 @@ if __name__ == "__main__":
     if "--http" in sys.argv:
         # HTTP mode for Render deployment
         from fastapi import FastAPI
-        from fastapi.responses import JSONResponse
+        from fastapi.responses import JSONResponse, Response
         from fastapi.middleware.cors import CORSMiddleware
         import uvicorn
         
@@ -2042,6 +2042,17 @@ if __name__ == "__main__":
         async def handle_mcp_message(message: dict):
             mcp_server = MCPServer()
             return await mcp_server.handle_message(message)
+        
+        @app.post("/mcp")
+        async def handle_mcp_endpoint(message: dict):
+            """Handle MCP requests from Claude Web on /mcp endpoint."""
+            mcp_server = MCPServer()
+            return await mcp_server.handle_message(message)
+        
+        @app.get("/mcp")
+        async def handle_mcp_sse():
+            """Handle Server-Sent Events for MCP."""
+            return Response(content="", media_type="text/event-stream")
         
         @app.get("/health")
         async def health_check():
