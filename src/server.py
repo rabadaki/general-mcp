@@ -29,6 +29,7 @@ Usage: python server.py (runs on http://localhost:8000)
 from fastapi import FastAPI, HTTPException, Response, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 # Standard libraries
@@ -1059,6 +1060,25 @@ async def handle_mcp_get(request: Request):
             
             # Send capabilities
             yield "data: {\"jsonrpc\": \"2.0\", \"method\": \"capabilities\", \"result\": {\"tools\": true, \"resources\": true, \"prompts\": true}}\n\n"
+            
+            # Send tools list proactively since we advertised listChanged: true
+            auth_token = None
+            if authorization and authorization.startswith("Bearer "):
+                auth_token = authorization.replace("Bearer ", "")
+            
+            tools_response = TOOLS.copy()
+            is_authenticated = bool(auth_token)
+            for tool in tools_response:
+                tool["enabled"] = is_authenticated
+                tool["authenticated"] = is_authenticated
+            
+            print(f"📋 Sending tools list via SSE stream (authenticated: {is_authenticated}, tools: {len(tools_response)})")
+            tools_event = {
+                "jsonrpc": "2.0",
+                "method": "notifications/tools/listChanged",
+                "params": {"tools": tools_response}
+            }
+            yield f"data: {json.dumps(tools_event)}\n\n"
             
             # Keep connection alive
             while True:
