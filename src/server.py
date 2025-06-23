@@ -788,6 +788,12 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
         
         # For tool calls, we need to validate authentication
         method = message.get("method")
+        
+        # Special logging for tools/list to track down the issue
+        if method == "tools/list":
+            print(f"🔍 FOUND tools/list request in /message endpoint!")
+        else:
+            print(f"🔍 Method '{method}' received in /message (not tools/list)")
         message_id = message.get("id")
         
         # Remove the auth token from params before processing (it's not part of the actual parameters)
@@ -1027,6 +1033,13 @@ async def handle_mcp_post(message: dict, request: Request):
             client_type = f"❓ Unknown ({client_name})"
         
         print(f"📨 SSE POST from {client_type} ({request.client.host if request.client else 'unknown'}): {message}")
+        
+        # Special logging for tools/list to track down the issue
+        method = message.get("method")
+        if method == "tools/list":
+            print(f"🔍 FOUND tools/list request in /mcp endpoint!")
+        else:
+            print(f"🔍 Method '{method}' received (not tools/list)")
         
         # Extract Bearer token from Authorization header
         authorization = request.headers.get("authorization") or request.headers.get("Authorization")
