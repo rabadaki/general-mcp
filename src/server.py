@@ -1199,6 +1199,12 @@ async def mcp_metadata():
         }
     }
 
+@app.post("/message")
+async def handle_message_post(message: dict, request: Request):
+    """Handle MCP messages via POST to /message endpoint (fallback for clients that ignore metadata)."""
+    print(f"📨 Received request at POST /message - forwarding to SSE handler")
+    return await handle_mcp_message(message, request)
+
 @app.post("/register")
 async def oauth_register(request: dict):
     """OAuth 2.0 client registration."""
