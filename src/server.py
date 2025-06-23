@@ -1259,8 +1259,7 @@ async def mcp_metadata():
             "prompts": True
         },
         "endpoints": {
-            "message": "https://general-mcp-production.up.railway.app/mcp",
-            "sse": "https://general-mcp-production.up.railway.app/mcp"
+            "mcp": "https://general-mcp-production.up.railway.app/mcp"
         },
         "authentication": {
             "oauth2": {
@@ -1338,7 +1337,7 @@ async def oauth_token(request: Request):
         "token_type": "Bearer", 
         "expires_in": 3600,
         "scope": "mcp:read mcp:write",
-        "mcp_endpoint": "https://general-mcp-production.up.railway.app/sse",
+        "mcp_endpoint": "https://general-mcp-production.up.railway.app/mcp",
         "server_info": {
             "name": "General MCP Server",
             "version": "1.0.0"
