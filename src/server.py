@@ -1042,11 +1042,23 @@ async def handle_mcp_post(message: dict, request: Request):
                 message["params"] = {}
             message["params"]["_claudeMcpAuthToken"] = auth_token
         
-        # Process the message using internal handler with timeout
+        # Process the message using internal handler with method-specific timeout
         import asyncio
+        method = message.get("method", "")
+        
+        # Set timeout based on method type
+        if method in ["tools/list", "resources/list", "prompts/list", "initialize"]:
+            timeout = 5.0  # Fast operations should be instant
+        elif method == "tools/call":
+            timeout = 120.0  # Tool calls can take time (Apify, Lighthouse, etc.)
+        else:
+            timeout = 30.0  # Default for other operations
+            
+        print(f"⏰ Using {timeout}s timeout for method: {method}")
+        
         result = await asyncio.wait_for(
             handle_mcp_message_internal(message), 
-            timeout=120.0  # 2 minute timeout to match bridge
+            timeout=timeout
         )
         print(f"✅ SSE POST response: {result}")
         return result
