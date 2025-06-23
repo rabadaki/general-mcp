@@ -575,7 +575,7 @@ async def handle_mcp_message_internal(message: dict):
                     "version": "1.0.0"
                 },
                 "authentication": {
-                    "status": "authenticated" if claude_auth_token else "unauthenticated",
+                    "status": "authenticated" if claude_auth_token else "required",
                     "method": "oauth2"
                 }
             }
@@ -764,7 +764,7 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                         "version": "1.0.0"
                     },
                     "authentication": {
-                        "status": "authenticated" if (auth_token or claude_auth_token) else "unauthenticated",
+                        "status": "authenticated" if (auth_token or claude_auth_token) else "required",
                         "method": "oauth2"
                     }
                 }
