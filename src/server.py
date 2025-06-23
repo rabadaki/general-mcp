@@ -572,6 +572,7 @@ async def handle_mcp_message_internal(message: dict):
         }
     
     elif method == "tools/list":
+        print(f"📋 Processing tools/list request (authenticated: {bool(claude_auth_token)})")
         # For authenticated requests, return tools as available
         tools_response = TOOLS.copy()
         
@@ -581,6 +582,7 @@ async def handle_mcp_message_internal(message: dict):
                 tool["enabled"] = True
                 tool["authenticated"] = True
         
+        print(f"✅ Returning {len(tools_response)} tools")
         return {
             "jsonrpc": "2.0",
             "id": message_id,
@@ -745,6 +747,7 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
             }
         
         elif method == "tools/list":
+            print(f"📋 Processing tools/list request via /message (authenticated: {bool(auth_token or claude_auth_token)})")
             # For authenticated requests, return tools as available
             tools_response = TOOLS.copy()
             
@@ -754,6 +757,7 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                     tool["enabled"] = True
                     tool["authenticated"] = True
             
+            print(f"✅ Returning {len(tools_response)} tools via /message")
             return {
                 "jsonrpc": "2.0",
                 "id": message_id,
@@ -931,7 +935,7 @@ async def handle_sse_post(message: dict, request: Request, authorization: str = 
         import asyncio
         result = await asyncio.wait_for(
             handle_mcp_message_internal(message), 
-            timeout=30.0  # 30 second timeout
+            timeout=120.0  # 2 minute timeout to match bridge
         )
         print(f"✅ SSE POST response: {result}")
         return result
