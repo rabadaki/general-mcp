@@ -1158,9 +1158,17 @@ async def mcp_connect(request: dict):
         "result": {
             "protocolVersion": "2024-11-05",
             "capabilities": {
-                "tools": {},
-                "resources": {},
-                "prompts": {},
+                "tools": {
+                    "listChanged": True,
+                    "supportsProgress": False
+                },
+                "resources": {
+                    "subscribe": False,
+                    "listChanged": False
+                },
+                "prompts": {
+                    "listChanged": False
+                },
                 "logging": {}
             },
             "serverInfo": {
