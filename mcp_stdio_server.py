@@ -1981,6 +1981,30 @@ async def lighthouse_bulk_audit(urls: list, **kwargs) -> str:
     return header + "\n\n".join(results)
 
 # ============================================================================
+# GLOBAL CACHE FOR PERFORMANCE OPTIMIZATION
+# ============================================================================
+
+# Pre-build tools/list response to eliminate processing time
+_CACHED_TOOLS_RESPONSE = None
+
+def get_cached_tools_response(message_id=None):
+    """Get pre-built tools/list response to avoid processing delay."""
+    global _CACHED_TOOLS_RESPONSE
+    
+    if _CACHED_TOOLS_RESPONSE is None:
+        # Build minimal tools response for faster delivery
+        mcp_server = MCPServer()
+        _CACHED_TOOLS_RESPONSE = {
+            "jsonrpc": "2.0",
+            "result": {"tools": mcp_server.tools}
+        }
+    
+    # Return copy with correct message ID
+    response = _CACHED_TOOLS_RESPONSE.copy()
+    response["id"] = message_id
+    return response
+
+# ============================================================================
 # STDIO MODE (for Claude Desktop)
 # ============================================================================
 
@@ -2046,8 +2070,24 @@ if __name__ == "__main__":
         @app.post("/mcp")
         async def handle_mcp_endpoint(message: dict):
             """Handle MCP requests from Claude Web on /mcp endpoint."""
+            import time
+            start_time = time.time()
+            method = message.get("method", "unknown")
+            
+            # Fast-path for tools/list to avoid timeout
+            if method == "tools/list":
+                logger.info("⚡ Using cached tools/list response for speed")
+                response = get_cached_tools_response(message.get("id"))
+                elapsed = time.time() - start_time
+                logger.info(f"✅ {method} completed in {elapsed:.3f}s (cached)")
+                return response
+            
+            # Regular processing for other methods
             mcp_server = MCPServer()
-            return await mcp_server.handle_message(message)
+            response = await mcp_server.handle_message(message)
+            elapsed = time.time() - start_time
+            logger.info(f"✅ {method} completed in {elapsed:.3f}s")
+            return response
         
         @app.get("/mcp")
         async def handle_mcp_sse():
