@@ -1178,12 +1178,6 @@ async def mcp_connect(request: dict):
         }
     }
 
-@app.post("/mcp")
-async def mcp_endpoint(message: dict, request: Request):
-    """Alternative MCP endpoint that Claude AI web might expect."""
-    print(f"📥 /mcp endpoint called with: {message}")
-    # Redirect to main message handler
-    return await handle_mcp_message(message, request)
 
 @app.get("/v1/servers")
 async def list_servers():
