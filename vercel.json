@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.py"
+    }
+  ],
+  "env": {
+    "YOUTUBE_API_KEY": "@youtube_api_key",
+    "APIFY_TOKEN": "@apify_token", 
+    "PERPLEXITY_API_KEY": "@perplexity_api_key",
+    "SCRAPINGBEE_API_KEY": "@scrapingbee_api_key"
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
+  }
+}
