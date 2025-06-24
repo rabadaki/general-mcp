@@ -1017,7 +1017,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.post("/mcp")
 async def handle_mcp_post(message: dict, request: Request):
-    """Handle MCP messages via POST to MCP endpoint."""
+    print(f"EARLY LOG: {datetime.now().isoformat()} from {request.client.host} UA: {request.headers.get('user-agent')}")
     try:
         # Detect client type
         user_agent = request.headers.get("user-agent", "")
