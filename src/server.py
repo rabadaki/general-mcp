@@ -3430,13 +3430,13 @@ async def get_keywords_for_site(domain: str, location: str = "United States", li
     location_code = 2840 if location == "United States" else 2826
     
     payload = [{
-        "target": domain,
+        "keyword": domain,
         "location_code": location_code,
         "language_name": "English",
         "limit": limit
     }]
     
-    data = await make_dataforseo_request("dataforseo_labs/google/keywords_for_site/live", payload)
+    data = await make_dataforseo_request("dataforseo_labs/google/keyword_suggestions/live", payload)
     
     if not data or "tasks" not in data:
         return f"❌ Failed to get keyword opportunities for {domain}"
@@ -3464,13 +3464,11 @@ async def get_keywords_for_site(domain: str, location: str = "United States", li
     total_volume = 0
     
     for i, item in enumerate(items[:limit], 1):
-        keyword_data = item.get("keyword_data", {})
-        keyword = keyword_data.get("keyword", "Unknown")
-        
-        keyword_info = keyword_data.get("keyword_info", {})
-        volume = keyword_info.get("search_volume", 0)
-        competition = keyword_info.get("competition", 0)
-        cpc = keyword_info.get("cpc", 0)
+        keyword = item.get("keyword", "Unknown")
+        keyword_info = item.get("keyword_info", {})
+        volume = keyword_info.get("search_volume", 0) or 0
+        competition = keyword_info.get("competition", 0) or 0
+        cpc = keyword_info.get("cpc", 0) or 0
         
         total_volume += volume
         
