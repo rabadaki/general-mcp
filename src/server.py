@@ -3156,16 +3156,17 @@ async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, **kwargs) ->
     
     # Test the try/except structure
     try:
-        # NO ACTUAL API CALL - just test the structure
-        endpoint = "on_page/task_post/"
+        # TEST THE ACTUAL API CALL - suspected culprit
+        task_data = await make_dataforseo_request("on_page/task_post/", task_payload)
         
-        # Simulate the response structure check
-        mock_response = {"tasks": [{"status_code": 20000, "result": [{"id": "test123"}]}]}
+        if not task_data or "tasks" not in task_data:
+            return f"❌ OnPage audit task creation failed for '{domain}'"
         
-        if not mock_response or "tasks" not in mock_response:
-            return f"❌ Mock test failed"
+        task = task_data["tasks"][0]
+        if task.get("status_code") != 20000:
+            return f"❌ OnPage API error: {task.get('status_message', 'Unknown error')}"
         
-        return f"🔍 DEBUG: OnPage structure test passed for {domain} - payload created!"
+        return f"🔍 DEBUG: OnPage API call succeeded for {domain}!"
             
     except Exception as e:
         return f"❌ DEBUG: Exception in structure: {str(e)}"
