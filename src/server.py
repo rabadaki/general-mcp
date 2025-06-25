@@ -2564,13 +2564,15 @@ async def search_serp(query: str, location: str = "United States", language: str
     if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
         return f"🔍 SERP search for '{query}'\n\n⚠️ **DataForSEO API Required**\nTo enable SERP analysis, configure DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD.\n\n📊 **Search processed successfully**\n📝 Query: {query}\n🌍 Location: {location}\n🗣️ Language: {language}\n🔢 Limit: {limit}"
     
-    # DataForSEO SERP API payload
+    # Enhanced DataForSEO SERP API payload to capture all SERP features
     payload = [{
         "keyword": query,
         "location_name": location,
         "language_code": language,
         "device": "desktop",
-        "os": "windows"
+        "os": "windows",
+        "depth": min(limit * 2, 100),  # Request more results for better quality
+        "se_domain": "google.com"
     }]
     
     data = await make_dataforseo_request("serp/google/organic/live/advanced", payload)
@@ -2590,38 +2592,163 @@ async def search_serp(query: str, location: str = "United States", language: str
         log_api_usage("DataForSEO", "serp", limit, 0, 0.0025)
         return f"❌ Invalid SERP API response structure for '{query}'"
     
-    results = result_data[0].get("items", [])[:limit] if result_data else []
+    all_items = result_data[0].get("items", []) if result_data else []
     
-    if not results:
+    if not all_items:
         log_api_usage("DataForSEO", "serp", limit, 0, 0.0025)
         return f"❌ No SERP results found for '{query}'"
     
-    formatted_results = []
-    for i, result in enumerate(results, 1):
-        # Safe string extraction with None protection
-        title = (result.get("title") or "No title").strip()
-        url = (result.get("url") or "").strip()
-        description = (result.get("description") or "").strip()
-        
-        # Use domain as fallback for missing title
-        if not title or title == "No title":
-            domain = (result.get("domain") or "").strip()
-            if domain:
-                title = f"Website: {domain}"
-        
-        # Safely handle description truncation
-        if description and len(description) > 200:
-            description = description[:197] + "..."
-        elif not description:
-            description = "No description available"
-            
-        position = result.get("rank_absolute", i)
-        
-        formatted_results.append(f"**{position}. {title}**\n🔗 {url}\n📝 {description}")
+    # Separate organic results from SERP features
+    organic_results = []
+    serp_features = []
     
-    log_api_usage("DataForSEO", "serp", limit, len(results), 0.0025)
-    header = f"🔍 **SERP Results for '{query}'** ({location}, {language})\n\nFound {len(results)} organic results"
-    return header + "\n\n" + "\n\n---\n\n".join(formatted_results)
+    for item in all_items:
+        item_type = item.get("type", "").lower()
+        
+        if item_type == "organic":
+            # Enhanced organic result processing
+            title = (item.get("title") or "No title").strip()
+            url = (item.get("url") or "").strip()
+            description = (item.get("description") or "").strip()
+            domain = (item.get("domain") or "").strip()
+            position = item.get("rank_absolute", len(organic_results) + 1)
+            
+            # Skip results with completely empty core data
+            if not title and not description:
+                continue
+                
+            # Use domain as fallback for missing title
+            if not title or title == "No title":
+                if domain:
+                    title = f"Website: {domain}"
+            
+            # Handle description
+            if description and len(description) > 250:
+                description = description[:247] + "..."
+            elif not description:
+                description = "No description available"
+            
+            organic_results.append({
+                "position": position,
+                "title": title,
+                "url": url,
+                "description": description,
+                "domain": domain
+            })
+            
+        elif item_type in ["featured_snippet", "answer_box", "knowledge_graph", "local_pack", "image_pack", "video", "shopping", "people_also_ask", "related_searches", "paid"]:
+            # Collect SERP features with enhanced data
+            feature_data = {
+                "type": item_type,
+                "position": item.get("rank_absolute", 0),
+                "title": (item.get("title") or "").strip(),
+                "snippet": (item.get("snippet") or "").strip(),
+                "url": (item.get("url") or "").strip()
+            }
+            
+            # Add type-specific data
+            if item_type == "featured_snippet":
+                feature_data["featured_title"] = (item.get("featured_title") or "").strip()
+                feature_data["source"] = (item.get("domain") or "").strip()
+            elif item_type == "knowledge_graph":
+                feature_data["description"] = (item.get("description") or "").strip()
+                feature_data["source"] = (item.get("source") or "").strip()
+            elif item_type == "local_pack":
+                feature_data["rating"] = item.get("rating", {}).get("value", "")
+                feature_data["address"] = (item.get("address") or "").strip()
+            elif item_type == "shopping":
+                feature_data["price"] = (item.get("price") or "").strip()
+                feature_data["source"] = (item.get("source") or "").strip()
+            elif item_type == "people_also_ask":
+                feature_data["question"] = (item.get("question") or "").strip()
+            
+            serp_features.append(feature_data)
+    
+    # Limit organic results to requested amount, prioritizing quality
+    quality_results = [r for r in organic_results if r["title"] != "Website: " and r["description"] != "No description available"]
+    fallback_results = [r for r in organic_results if r not in quality_results]
+    
+    final_results = quality_results[:limit]
+    if len(final_results) < limit:
+        final_results.extend(fallback_results[:limit - len(final_results)])
+    
+    # Format output with SERP features
+    formatted_sections = []
+    
+    # SERP Features Summary
+    if serp_features:
+        feature_summary = []
+        feature_counts = {}
+        
+        for feature in serp_features:
+            ftype = feature["type"].replace("_", " ").title()
+            feature_counts[ftype] = feature_counts.get(ftype, 0) + 1
+        
+        for ftype, count in feature_counts.items():
+            if count > 1:
+                feature_summary.append(f"• {ftype} ({count})")
+            else:
+                feature_summary.append(f"• {ftype}")
+        
+        if feature_summary:
+            formatted_sections.append(f"🎯 **SERP Features Detected:**\n" + "\n".join(feature_summary[:5]))
+    
+    # Detailed SERP Features (top 3)
+    priority_features = ["featured_snippet", "knowledge_graph", "answer_box", "local_pack"]
+    shown_features = []
+    
+    for priority_type in priority_features:
+        for feature in serp_features:
+            if feature["type"] == priority_type and len(shown_features) < 3:
+                feature_name = feature["type"].replace("_", " ").title()
+                feature_text = f"📌 **{feature_name}**"
+                
+                if feature.get("title"):
+                    feature_text += f"\n💡 {feature['title']}"
+                if feature.get("snippet"):
+                    snippet = feature['snippet'][:150] + "..." if len(feature['snippet']) > 150 else feature['snippet']
+                    feature_text += f"\n📝 {snippet}"
+                if feature.get("source"):
+                    feature_text += f"\n🌐 Source: {feature['source']}"
+                elif feature.get("url"):
+                    feature_text += f"\n🔗 {feature['url']}"
+                    
+                shown_features.append(feature_text)
+                break
+    
+    if shown_features:
+        formatted_sections.append("\n\n".join(shown_features))
+    
+    # Organic Results
+    if final_results:
+        organic_formatted = []
+        for result in final_results:
+            result_text = f"**{result['position']}. {result['title']}**"
+            if result['url']:
+                result_text += f"\n🔗 {result['url']}"
+            if result['description']:
+                result_text += f"\n📝 {result['description']}"
+            if result['domain'] and result['domain'] not in result['url']:
+                result_text += f"\n🌐 {result['domain']}"
+                
+            organic_formatted.append(result_text)
+        
+        if organic_formatted:
+            formatted_sections.append("📊 **Organic Results:**\n\n" + "\n\n---\n\n".join(organic_formatted))
+    
+    log_api_usage("DataForSEO", "serp", limit, len(final_results), 0.0025)
+    
+    # Enhanced header with comprehensive stats
+    header_parts = [
+        f"🔍 **SERP Analysis for '{query}'** ({location}, {language})",
+        f"📊 {len(final_results)} organic results"
+    ]
+    
+    if serp_features:
+        header_parts.append(f"🎯 {len(serp_features)} SERP features detected")
+    
+    header = "\n".join(header_parts)
+    return header + "\n\n" + "\n\n".join(formatted_sections)
 
 async def keyword_research(keywords: List[str], location: str = "United States", language: str = "en") -> str:
     """Get keyword suggestions and search volume data using DataForSEO."""

@@ -1687,13 +1687,15 @@ async def search_serp(query: str, location: str = "United States", language: str
     if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
         return f"🔍 SERP search for '{query}'\n\n⚠️ **DataForSEO API Required**\nTo enable SERP analysis, configure DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD.\n\n📊 **Search processed successfully**\n📝 Query: {query}\n🌍 Location: {location}\n🗣️ Language: {language}\n🔢 Limit: {limit}"
     
-    # DataForSEO SERP API payload
+    # Enhanced DataForSEO SERP API payload to capture all SERP features
     payload = [{
         "keyword": query,
         "location_name": location,
         "language_code": language,
         "device": "desktop",
-        "os": "windows"
+        "os": "windows",
+        "depth": min(limit * 2, 100),  # Request more results for better quality
+        "se_domain": "google.com"
     }]
     
     data = await make_dataforseo_request("serp/google/organic/live/advanced", payload)
