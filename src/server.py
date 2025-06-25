@@ -3133,6 +3133,14 @@ async def lighthouse_bulk_audit(urls: list) -> str:
     return header + "\n\n".join(results)
 
 # ============================================================================
+# ONPAGE SEO AUDIT FUNCTIONS (DEBUG VERSION)
+# ============================================================================
+
+async def onpage_seo_audit(target: str, **kwargs) -> str:
+    """DEBUG: Minimal OnPage function that immediately returns"""
+    return f"🔍 DEBUG: OnPage audit request received for {target} - function works!"
+
+# ============================================================================
 # MAIN APPLICATION
 # ============================================================================
 
