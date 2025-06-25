@@ -717,7 +717,21 @@ class MCPServer:
                     "result": {
                         "protocolVersion": "2024-11-05",
                         "capabilities": {
-                            "tools": {}
+                            "tools": {
+                                "listChanged": True,
+                                "supportsProgress": True
+                            },
+                            "resources": {
+                                "subscribe": True,
+                                "listChanged": True
+                            },
+                            "prompts": {
+                                "listChanged": True
+                            },
+                            "logging": {
+                                "level": "info",
+                                "setLevel": True
+                            }
                         },
                         "serverInfo": {
                             "name": "general-mcp",
@@ -735,10 +749,24 @@ class MCPServer:
                 }
                 
             elif method == "resources/list":
+                resources = [
+                    {
+                        "uri": "resource://api-usage-stats",
+                        "name": "API Usage Statistics",
+                        "description": "Real-time API usage and cost tracking",
+                        "mimeType": "application/json"
+                    },
+                    {
+                        "uri": "resource://server-config",
+                        "name": "Server Configuration",
+                        "description": "Current MCP server configuration and capabilities",
+                        "mimeType": "application/json"
+                    }
+                ]
                 return {
                     "jsonrpc": "2.0",
                     "id": message_id,
-                    "result": {"resources": []}
+                    "result": {"resources": resources}
                 }
                 
             elif method == "prompts/list":

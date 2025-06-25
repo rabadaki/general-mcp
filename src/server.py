@@ -103,6 +103,13 @@ DEFAULT_TIMEOUT = 30.0
 # Cost tracking
 api_usage_log = []
 
+# Progress tracking for long-running operations
+progress_trackers = {}
+connected_sse_clients = set()
+
+# SSE notification queue
+notification_queue = asyncio.Queue()
+
 # API Keys from environment
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN")
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY") 
@@ -581,6 +588,53 @@ TOOLS = [
 ]
 
 # ============================================================================
+# PROGRESS TRACKING AND NOTIFICATIONS
+# ============================================================================
+
+async def send_progress_notification(request_id: str, progress: float, total: float = 1.0, message: str = None):
+    """Send progress notification for long-running operations"""
+    notification = {
+        "jsonrpc": "2.0",
+        "method": "notifications/progress",
+        "params": {
+            "progressToken": str(request_id),
+            "progress": progress,
+            "total": total
+        }
+    }
+    if message:
+        notification["params"]["message"] = message
+    
+    # Queue notification for SSE clients
+    await notification_queue.put(notification)
+    print(f"📊 Progress: {progress}/{total} for request {request_id}")
+
+async def send_tools_changed_notification():
+    """Notify clients that tool list has changed"""
+    notification = {
+        "jsonrpc": "2.0", 
+        "method": "notifications/tools/list_changed"
+    }
+    await notification_queue.put(notification)
+    print("🔧 Sent tools/list_changed notification")
+
+async def send_log_notification(level: str, message: str, data: dict = None):
+    """Send log notification to clients"""
+    notification = {
+        "jsonrpc": "2.0",
+        "method": "notifications/log",
+        "params": {
+            "level": level,  # "info", "warning", "error"
+            "message": message,
+            "timestamp": datetime.now().isoformat()
+        }
+    }
+    if data:
+        notification["params"]["data"] = data
+    
+    await notification_queue.put(notification)
+
+# ============================================================================
 # MCP HTTP ENDPOINTS
 # ============================================================================
 
@@ -614,16 +668,22 @@ async def handle_mcp_message_internal(message: dict):
                 "capabilities": {
                     "tools": {
                         "listChanged": True,
-                        "supportsProgress": False
+                        "supportsProgress": True  # Enable progress for long-running tools
                     },
                     "resources": {
-                        "subscribe": False,
-                        "listChanged": False
+                        "subscribe": True,
+                        "listChanged": True
                     },
                     "prompts": {
-                        "listChanged": False
+                        "listChanged": True
                     },
-                    "logging": {}
+                    "logging": {
+                        "level": "info",  # Support info, warning, error levels
+                        "setLevel": True
+                    },
+                    "experimental": {
+                        "customAuth": True  # For custom auth pattern
+                    }
                 },
                 "serverInfo": {
                     "name": "General MCP Server",
@@ -658,10 +718,26 @@ async def handle_mcp_message_internal(message: dict):
     
     elif method == "resources/list":
         print(f"📁 Processing resources/list request (authenticated: {bool(claude_auth_token)})")
+        
+        resources = [
+            {
+                "uri": "resource://api-usage-stats",
+                "name": "API Usage Statistics",
+                "description": "Real-time API usage and cost tracking",
+                "mimeType": "application/json"
+            },
+            {
+                "uri": "resource://server-config",
+                "name": "Server Configuration",
+                "description": "Current MCP server configuration and capabilities",
+                "mimeType": "application/json"
+            }
+        ]
+        
         return {
             "jsonrpc": "2.0",
             "id": message_id,
-            "result": {"resources": []}
+            "result": {"resources": resources}
         }
     
     elif method == "prompts/list":
@@ -677,6 +753,18 @@ async def handle_mcp_message_internal(message: dict):
         arguments = message.get("params", {}).get("arguments", {})
         
         print(f"INFO:__main__:Calling tool: {tool_name} with args: {arguments}")
+        
+        # Long-running tools that need progress tracking
+        long_running_tools = {
+            "search_twitter", "search_tiktok", "search_instagram",
+            "lighthouse_audit", "lighthouse_bulk_audit",
+            "search_serp", "competitor_analysis"
+        }
+        
+        # Start progress tracking for long-running tools
+        if tool_name in long_running_tools and message_id:
+            await send_progress_notification(message_id, 0.1, 1.0, f"Starting {tool_name}...")
+            await send_log_notification("info", f"Executing long-running tool: {tool_name}")
         
         # Call the appropriate tool function
         result = None
@@ -734,6 +822,10 @@ async def handle_mcp_message_internal(message: dict):
                 }
             }
         
+        # Send completion notification for long-running tools
+        if tool_name in long_running_tools and message_id:
+            await send_progress_notification(message_id, 1.0, 1.0, f"Completed {tool_name}")
+        
         return {
             "jsonrpc": "2.0",
             "id": message_id,
@@ -743,9 +835,86 @@ async def handle_mcp_message_internal(message: dict):
                         "type": "text",
                         "text": result
                     }
-                ]
+                ],
+                "isError": False  # Indicate successful completion
             }
         }
+    
+    elif method == "resources/read":
+        resource_uri = message.get("params", {}).get("uri")
+        
+        if resource_uri == "resource://api-usage-stats":
+            # Return current API usage statistics
+            stats = await get_api_usage_stats()
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "result": {
+                    "contents": [
+                        {
+                            "uri": resource_uri,
+                            "mimeType": "application/json",
+                            "text": json.dumps(stats, indent=2)
+                        }
+                    ]
+                }
+            }
+        elif resource_uri == "resource://server-config":
+            # Return server configuration
+            config = {
+                "protocolVersion": "2024-11-05",
+                "serverInfo": {
+                    "name": "General MCP Server",
+                    "version": "1.0.0"
+                },
+                "capabilities": {
+                    "tools": {
+                        "listChanged": True,
+                        "supportsProgress": True
+                    },
+                    "resources": {
+                        "subscribe": True,
+                        "listChanged": True
+                    },
+                    "prompts": {
+                        "listChanged": True
+                    },
+                    "logging": {
+                        "level": "info",
+                        "setLevel": True
+                    }
+                },
+                "connectedClients": len(connected_sse_clients),
+                "environment": {
+                    "apify": "configured" if APIFY_TOKEN else "not configured",
+                    "youtube": "configured" if YOUTUBE_API_KEY else "not configured",
+                    "perplexity": "configured" if PERPLEXITY_API_KEY else "not configured",
+                    "scrapingbee": "configured" if SCRAPINGBEE_API_KEY else "not configured",
+                    "dataforseo": "configured"
+                }
+            }
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "result": {
+                    "contents": [
+                        {
+                            "uri": resource_uri,
+                            "mimeType": "application/json",
+                            "text": json.dumps(config, indent=2)
+                        }
+                    ]
+                }
+            }
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": message_id,
+                "error": {
+                    "code": -32602,
+                    "message": f"Unknown resource: {resource_uri}"
+                }
+            }
     
     else:
         return {
@@ -1122,15 +1291,45 @@ async def handle_mcp_get(request: Request):
     
     # SSE stream for server-initiated notifications only
     async def event_stream():
+        # Add this client to connected set
+        client_id = f"sse_{request.client.host}_{int(time.time())}"
+        connected_sse_clients.add(client_id)
+        print(f"👥 SSE client connected: {client_id}")
+        
         try:
-            # Keep connection alive with periodic pings
+            # Send notifications and keep connection alive
             while True:
-                await asyncio.sleep(30)  # Ping every 30 seconds
-                yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"ping\", \"timestamp\": {int(time.time())}}}\n\n"
-                
+                try:
+                    # Check for queued notifications (non-blocking)
+                    notification = await asyncio.wait_for(
+                        notification_queue.get(), 
+                        timeout=30.0  # Wait up to 30 seconds
+                    )
+                    # Send the notification
+                    yield f"data: {json.dumps(notification)}\n\n"
+                    print(f"📤 Sent notification: {notification.get('method')}")
+                    
+                except asyncio.TimeoutError:
+                    # No notification, send ping to keep alive
+                    ping = {
+                        "jsonrpc": "2.0",
+                        "method": "ping",
+                        "params": {"timestamp": int(time.time())}
+                    }
+                    yield f"data: {json.dumps(ping)}\n\n"
+                    
         except Exception as e:
-            print(f"SSE Stream Error: {e}")
-            yield f"data: {{\"jsonrpc\": \"2.0\", \"method\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
+            print(f"SSE Stream Error for {client_id}: {e}")
+            error_msg = {
+                "jsonrpc": "2.0",
+                "method": "error",
+                "params": {"message": str(e)}
+            }
+            yield f"data: {json.dumps(error_msg)}\n\n"
+        finally:
+            # Remove client on disconnect
+            connected_sse_clients.discard(client_id)
+            print(f"👋 SSE client disconnected: {client_id}")
     
     return StreamingResponse(
         event_stream(),
