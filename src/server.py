@@ -3183,7 +3183,7 @@ async def get_onpage_results(task_id: str, domain: str) -> str:
         # Check if our task is in the ready list
         ready_tasks = ready_data.get("tasks", [])
         if not ready_tasks:
-            return f"⏳ No OnPage tasks are ready yet. Task {task_id} may still be processing."
+            return f"⏳ No OnPage tasks are ready yet. Task {task_id} may still be processing.\n\nDEBUG: Ready data response: {str(ready_data)[:300]}"
         
         # Look for our specific task
         our_task = None
@@ -3194,7 +3194,13 @@ async def get_onpage_results(task_id: str, domain: str) -> str:
                     break
         
         if not our_task:
-            return f"⏳ Task {task_id} is not ready yet. Please check back in a few minutes."
+            # Debug: show what tasks are actually ready
+            ready_task_ids = []
+            for task_info in ready_tasks:
+                if task_info.get("result") and len(task_info["result"]) > 0:
+                    ready_task_ids.append(task_info["result"][0].get("id", "unknown"))
+            
+            return f"⏳ Task {task_id} is not ready yet.\n\nDEBUG: Found {len(ready_tasks)} ready tasks with IDs: {ready_task_ids[:5]}"
         
         # Task is ready, return basic status from the ready task info
         task_result = our_task.get("result", [{}])[0]
