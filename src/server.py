@@ -826,6 +826,8 @@ async def handle_mcp_message_internal(message: dict):
             result = await lighthouse_performance_score(**arguments)
         elif tool_name == "lighthouse_bulk_audit":
             result = await lighthouse_bulk_audit(**arguments)
+        elif tool_name == "onpage_seo_audit":
+            result = await onpage_seo_audit(**arguments)
         else:
             return {
                 "jsonrpc": "2.0",
@@ -1108,6 +1110,8 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 result = await lighthouse_performance_score(**arguments)
             elif tool_name == "lighthouse_bulk_audit":
                 result = await lighthouse_bulk_audit(**arguments)
+            elif tool_name == "onpage_seo_audit":
+                result = await onpage_seo_audit(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",
