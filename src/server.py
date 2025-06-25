@@ -3235,7 +3235,13 @@ async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, task_id: str
     if task_id:
         return await get_onpage_results(task_id, domain)
     
-    # Test payload creation (the suspected culprit)
+    # Create new task
+    log_api_usage("DataForSEO", "onpage", max_crawl_pages, cost_estimate=0.05)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     task_payload = [{
         "target": domain,
         "max_crawl_pages": min(max_crawl_pages, 1000),
