@@ -2969,8 +2969,16 @@ async def test_dataforseo_endpoints(domain: str = "nansen.ai") -> str:
             
             if response:
                 status_code = response.get("status_code", 0)
-                if status_code == 20000:
-                    results.append(f"✅ **{name}** - Available")
+                # Check if tasks array exists and has successful task
+                tasks = response.get("tasks", [])
+                if tasks and len(tasks) > 0:
+                    task_status = tasks[0].get("status_code", 0)
+                    if task_status == 20000:
+                        results.append(f"✅ **{name}** - Available")
+                    else:
+                        results.append(f"❌ **{name}** - Task error {task_status}: {tasks[0].get('status_message', 'Unknown')}")
+                elif status_code == 20000:
+                    results.append(f"✅ **{name}** - Available (no tasks)")
                 elif status_code == 40101:
                     results.append(f"❌ **{name}** - Insufficient credits")
                 elif status_code == 40102: 
