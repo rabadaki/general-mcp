@@ -3187,10 +3187,21 @@ async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, **kwargs) ->
             return f"❌ OnPage API invalid response for '{domain}'"
         
         task = task_data["tasks"][0]
-        if task.get("status_code") != 20000:
-            return f"❌ OnPage API error: {task.get('status_message', 'Unknown error')}"
+        status_code = task.get("status_code", 0)
+        status_msg = task.get("status_message", "")
         
-        return f"🔍 DEBUG: OnPage API call succeeded for {domain}!"
+        # Check if task was created successfully (20000 or 20100)
+        if status_code not in [20000, 20100] and "created" not in status_msg.lower():
+            return f"❌ OnPage API error {status_code}: {status_msg}"
+        
+        # Get task ID from result
+        task_result = task.get("result", [])
+        if not task_result:
+            return f"❌ OnPage: No task result in response"
+        
+        task_id = task_result[0].get("id", "unknown") if task_result else "unknown"
+        
+        return f"✅ OnPage audit initiated for {domain}! Task ID: {task_id}, Status: {status_msg}"
             
     except Exception as e:
         return f"❌ DEBUG: Exception in structure: {str(e)}"
