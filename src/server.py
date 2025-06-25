@@ -3454,9 +3454,10 @@ async def get_keywords_for_site(domain: str, location: str = "United States", li
         return f"📊 No keyword suggestions available for {domain}"
     
     # DEBUG: Show actual data structure
+    debug_sample = ""
     if items:
         first_item = items[0]
-        debug_sample = f"DEBUG - First item keys: {list(first_item.keys())}\nSample data: {str(first_item)[:300]}"
+        debug_sample = f"DEBUG - First item keys: {list(first_item.keys())}\nSample data: {str(first_item)[:300]}\n\n"
     
     # Format results
     formatted_keywords = []
@@ -3488,7 +3489,7 @@ async def get_keywords_for_site(domain: str, location: str = "United States", li
 
 **Top {min(limit, len(items))} Opportunities:**"""
     
-    return header + "\n\n" + "\n\n---\n\n".join(formatted_keywords)
+    return debug_sample + header + "\n\n" + "\n\n---\n\n".join(formatted_keywords)
 
 async def get_domain_intersection(domain1: str, domain2: str, location: str = "United States", limit: int = 20) -> str:
     """Compare keyword overlap between two domains using DataForSEO Labs."""
