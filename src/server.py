@@ -3136,9 +3136,16 @@ async def lighthouse_bulk_audit(urls: list) -> str:
 # ONPAGE SEO AUDIT FUNCTIONS (DEBUG VERSION)
 # ============================================================================
 
+def extract_domain_for_onpage(target: str) -> str:
+    """Extract domain from URL for DataForSEO OnPage API."""
+    domain = target.replace('https://', '').replace('http://', '').replace('www.', '')
+    domain = domain.split('/')[0].split('?')[0]
+    return domain
+
 async def onpage_seo_audit(target: str, **kwargs) -> str:
-    """DEBUG: Minimal OnPage function that immediately returns"""
-    return f"🔍 DEBUG: OnPage audit request received for {target} - function works!"
+    """DEBUG: Test with domain extraction"""
+    domain = extract_domain_for_onpage(target)
+    return f"🔍 DEBUG: OnPage audit for domain {domain} - extraction works!"
 
 # ============================================================================
 # MAIN APPLICATION
