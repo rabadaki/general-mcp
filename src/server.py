@@ -3418,6 +3418,6 @@ if __name__ == "__main__":
     print(f"🏥 Health check: http://0.0.0.0:{port}/health")
     print(f"🔥 CACHE BUSTER: {datetime.now().isoformat()}")
     print("🔥 AUTO-DEPLOY TEST - Railway should see this!")
-    print("✅ Auto-deploy TEST #4 - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    print("🚀 ONPAGE RESULTS PARSING FIX")
+    print("✅ Auto-deploy TEST #5 - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print("🚀 DATAFORSEO LABS ENDPOINT TEST")
     uvicorn.run(app, host="0.0.0.0", port=port)
