@@ -3190,19 +3190,56 @@ async def get_onpage_results(task_id: str, domain: str) -> str:
                     task = summary_data["tasks"][0]
                     
                     if task.get("status_code") == 20000:
-                        # Success! Task is completed
-                        return f"""✅ **OnPage SEO Audit Results for {domain}**
+                        # Success! Parse the actual results
+                        results = task.get("result", [])
+                        if not results:
+                            return f"✅ Task completed but no results data available for {task_id}"
+                        
+                        result = results[0]
+                        
+                        # Extract key metrics
+                        crawl_progress = result.get("crawl_progress", {})
+                        pages_crawled = crawl_progress.get("pages_crawled", 0)
+                        pages_in_queue = crawl_progress.get("pages_in_queue", 0)
+                        
+                        # Extract issues summary
+                        onpage_score = result.get("onpage_score", 0)
+                        errors = result.get("errors", 0)
+                        warnings = result.get("warnings", 0)
+                        notices = result.get("notices", 0)
+                        
+                        # Extract page-level issues if available
+                        pages = result.get("pages", [])
+                        
+                        # Format comprehensive report
+                        report = f"""🔍 **OnPage SEO Audit Results for {domain}**
 
-📊 **Status:** Task completed successfully
-🆔 **Task ID:** {task_id}
-🔗 **Endpoint:** {endpoint}
+📊 **Crawl Summary:**
+📄 Pages Crawled: {pages_crawled:,}
+🔄 Pages in Queue: {pages_in_queue:,}
+💯 OnPage Score: {onpage_score:.1f}/100
 
-📋 **Results Retrieved:** The task has been completed and results are available.
+🚨 **Issues Found:**
+❌ Errors: {errors:,}
+⚠️ Warnings: {warnings:,}
+ℹ️ Notices: {notices:,}
 
-💡 **Next Steps:** 
-- Detailed parsing of results can be implemented
-- Current implementation confirms task completion
-- Data is available from DataForSEO API"""
+📋 **Pages Analyzed:** {len(pages):,}
+
+🆔 **Task ID:** {task_id}"""
+                        
+                        # Add top issues if available
+                        if pages:
+                            report += f"\n\n🔍 **Sample Page Analysis:**"
+                            for i, page in enumerate(pages[:3]):  # Show first 3 pages
+                                page_url = page.get("page", "Unknown")
+                                page_errors = page.get("errors", 0)
+                                page_warnings = page.get("warnings", 0)
+                                
+                                report += f"\n\n**{i+1}. {page_url}**"
+                                report += f"\n❌ Errors: {page_errors} | ⚠️ Warnings: {page_warnings}"
+                        
+                        return report
 
                     else:
                         return f"❌ Task status code: {task.get('status_code')} - {task.get('status_message', 'Unknown')}"
@@ -3289,5 +3326,6 @@ if __name__ == "__main__":
     print(f"🏥 Health check: http://0.0.0.0:{port}/health")
     print(f"🔥 CACHE BUSTER: {datetime.now().isoformat()}")
     print("🔥 AUTO-DEPLOY TEST - Railway should see this!")
-    print("✅ Auto-deploy TEST #2 - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print("✅ Auto-deploy TEST #3 - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print("🚀 ONPAGE RESULTS RETRIEVAL UPDATE")
     uvicorn.run(app, host="0.0.0.0", port=port)
