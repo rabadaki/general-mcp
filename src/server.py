@@ -587,13 +587,24 @@ TOOLS = [
     },
     {
         "name": "onpage_seo_audit",
-        "description": "DEBUG: OnPage SEO audit tool",
+        "description": "Comprehensive site-wide technical SEO analysis. Creates new audit or retrieves existing results.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "target": {
                     "type": "string",
-                    "description": "Website URL to analyze"
+                    "description": "Website URL to analyze (e.g., 'https://example.com')"
+                },
+                "task_id": {
+                    "type": "string",
+                    "description": "Existing task ID to retrieve results. If provided, retrieves results instead of creating new task."
+                },
+                "max_crawl_pages": {
+                    "type": "integer",
+                    "description": "Maximum pages to crawl (for new tasks)",
+                    "default": 100,
+                    "minimum": 1,
+                    "maximum": 1000
                 }
             },
             "required": ["target"]
@@ -3160,10 +3171,69 @@ def extract_domain_for_onpage(target: str) -> str:
     domain = domain.split('/')[0].split('?')[0]
     return domain
 
-async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, **kwargs) -> str:
-    """DEBUG: Test with API call structure but no actual call"""
+async def get_onpage_results(task_id: str, domain: str) -> str:
+    """Retrieve OnPage audit results for a given task ID."""
+    try:
+        # Get task status first
+        status_data = await make_dataforseo_request(f"on_page/tasks_ready", [])
+        
+        if not status_data:
+            return f"❌ Could not check task status"
+        
+        # Get summary results
+        summary_data = await make_dataforseo_request(f"on_page/summary/{task_id}", [])
+        
+        if not summary_data or "tasks" not in summary_data:
+            return f"❌ Could not retrieve results for task {task_id}"
+        
+        task = summary_data["tasks"][0]
+        if task.get("status_code") != 20000:
+            return f"❌ Task not ready or error: {task.get('status_message', 'Unknown')}"
+        
+        results = task.get("result", [])
+        if not results:
+            return f"⏳ Task {task_id} is still processing. Please check back later."
+        
+        result = results[0]
+        
+        # Extract key metrics
+        crawl_progress = result.get("crawl_progress", {})
+        pages_crawled = crawl_progress.get("pages_crawled", 0)
+        pages_in_queue = crawl_progress.get("pages_in_queue", 0)
+        
+        # Extract issues
+        onpage_score = result.get("onpage_score", 0)
+        errors = result.get("errors", 0)
+        warnings = result.get("warnings", 0)
+        notices = result.get("notices", 0)
+        
+        # Format comprehensive report
+        report = f"""🔍 **OnPage SEO Audit Results for {domain}**
+
+📊 **Crawl Summary:**
+📄 Pages Crawled: {pages_crawled}
+🔄 Pages in Queue: {pages_in_queue}
+💯 OnPage Score: {onpage_score:.1f}/100
+
+🚨 **Issues Found:**
+❌ Errors: {errors}
+⚠️ Warnings: {warnings}
+ℹ️ Notices: {notices}
+
+🆔 Task ID: {task_id}"""
+        
+        return report
+        
+    except Exception as e:
+        return f"❌ Error retrieving results: {str(e)[:100]}..."
+
+async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, task_id: str = None, **kwargs) -> str:
+    """OnPage SEO audit - creates new task or retrieves existing results"""
     domain = extract_domain_for_onpage(target)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    # If task_id provided, retrieve results instead of creating new task
+    if task_id:
+        return await get_onpage_results(task_id, domain)
     
     # Test payload creation (the suspected culprit)
     task_payload = [{
