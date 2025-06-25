@@ -3149,12 +3149,17 @@ async def get_top_pages(domain: str, location: str = "United States", limit: int
     
     data = await make_dataforseo_request("dataforseo_labs/google/top_pages/live", payload)
     
-    if not data or "tasks" not in data:
-        return f"❌ Failed to get top pages for {domain}"
+    if not data:
+        return f"❌ No response from top pages API for {domain}"
+    
+    if "tasks" not in data:
+        return f"❌ Top pages API response: {str(data)[:300]}"
     
     task = data["tasks"][0]
     if task.get("status_code") != 20000:
-        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+        status_code = task.get("status_code", "Unknown")
+        status_message = task.get("status_message", "Unknown error")
+        return f"❌ Top pages API error {status_code}: {status_message}"
     
     results = task.get("result", [])
     if not results:
