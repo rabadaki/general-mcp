@@ -3142,11 +3142,33 @@ def extract_domain_for_onpage(target: str) -> str:
     domain = domain.split('/')[0].split('?')[0]
     return domain
 
-async def onpage_seo_audit(target: str, **kwargs) -> str:
-    """DEBUG: Test with domain extraction and datetime"""
+async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, **kwargs) -> str:
+    """DEBUG: Test with API call structure but no actual call"""
     domain = extract_domain_for_onpage(target)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    return f"🔍 DEBUG: OnPage audit for {domain} at {timestamp} - datetime works!"
+    
+    # Test payload creation (the suspected culprit)
+    task_payload = [{
+        "target": domain,
+        "max_crawl_pages": min(max_crawl_pages, 1000),
+        "tag": f"onpage_{timestamp}"
+    }]
+    
+    # Test the try/except structure
+    try:
+        # NO ACTUAL API CALL - just test the structure
+        endpoint = "on_page/task_post/"
+        
+        # Simulate the response structure check
+        mock_response = {"tasks": [{"status_code": 20000, "result": [{"id": "test123"}]}]}
+        
+        if not mock_response or "tasks" not in mock_response:
+            return f"❌ Mock test failed"
+        
+        return f"🔍 DEBUG: OnPage structure test passed for {domain} - payload created!"
+            
+    except Exception as e:
+        return f"❌ DEBUG: Exception in structure: {str(e)}"
 
 # ============================================================================
 # MAIN APPLICATION
