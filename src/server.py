@@ -3143,7 +3143,7 @@ async def get_top_pages(domain: str, location: str = "United States", limit: int
     payload = [{
         "target": domain,
         "location_code": location_code,
-        "language_code": "en",
+        "language_name": "English",
         "limit": limit
     }]
     
