@@ -2816,9 +2816,9 @@ async def keyword_research(keywords: List[str], location: str = "United States",
     formatted_results = []
     for result in results:
         keyword = result.get("keyword", "Unknown")
-        volume = result.get("search_volume", 0)
-        competition = result.get("competition", "Unknown")
-        cpc = result.get("cpc", 0)
+        volume = result.get("search_volume", 0) or 0
+        competition = result.get("competition", "Unknown") or "Unknown"
+        cpc = result.get("cpc", 0) or 0
         
         formatted_results.append(f"🔍 **{keyword}**\n📊 Volume: {volume:,}/month\n💰 CPC: ${cpc:.2f}\n🎯 Competition: {competition}")
     
