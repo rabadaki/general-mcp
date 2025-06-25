@@ -695,6 +695,89 @@ TOOLS = [
             },
             "required": ["domain"]
         }
+    },
+    {
+        "name": "get_serp_competitors",
+        "description": "Find competitors for specific keywords with detailed SERP analysis",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Keywords to analyze competitors for (max 10)"
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Target location",
+                    "default": "United States"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum competitors to return",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 100
+                }
+            },
+            "required": ["keywords"]
+        }
+    },
+    {
+        "name": "get_keywords_for_site",
+        "description": "Discover keyword opportunities and suggestions for a specific domain",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to find keyword opportunities for (e.g., 'example.com')"
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Target location",
+                    "default": "United States"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum keyword suggestions to return",
+                    "default": 50,
+                    "minimum": 1,
+                    "maximum": 1000
+                }
+            },
+            "required": ["domain"]
+        }
+    },
+    {
+        "name": "get_domain_intersection",
+        "description": "Compare keyword overlap between two domains to identify shared opportunities",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain1": {
+                    "type": "string",
+                    "description": "First domain to compare (e.g., 'example.com')"
+                },
+                "domain2": {
+                    "type": "string",
+                    "description": "Second domain to compare (e.g., 'competitor.com')"
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Target location",
+                    "default": "United States"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum shared keywords to return",
+                    "default": 20,
+                    "minimum": 1,
+                    "maximum": 1000
+                }
+            },
+            "required": ["domain1", "domain2"]
+        }
     }
 ]
 
@@ -933,6 +1016,12 @@ async def handle_mcp_message_internal(message: dict):
             result = await get_historical_rankings(**arguments)
         elif tool_name == "get_top_pages":
             result = await get_top_pages(**arguments)
+        elif tool_name == "get_serp_competitors":
+            result = await get_serp_competitors(**arguments)
+        elif tool_name == "get_keywords_for_site":
+            result = await get_keywords_for_site(**arguments)
+        elif tool_name == "get_domain_intersection":
+            result = await get_domain_intersection(**arguments)
         else:
             return {
                 "jsonrpc": "2.0",
@@ -1225,6 +1314,12 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 result = await get_historical_rankings(**arguments)
             elif tool_name == "get_top_pages":
                 result = await get_top_pages(**arguments)
+            elif tool_name == "get_serp_competitors":
+                result = await get_serp_competitors(**arguments)
+            elif tool_name == "get_keywords_for_site":
+                result = await get_keywords_for_site(**arguments)
+            elif tool_name == "get_domain_intersection":
+                result = await get_domain_intersection(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -3195,6 +3290,216 @@ async def get_top_pages(domain: str, location: str = "United States", limit: int
 **Top Pages:**"""
     
     return header + "\n\n" + "\n\n---\n\n".join(formatted_pages)
+
+async def get_serp_competitors(keywords: List[str], location: str = "United States", limit: int = 10) -> str:
+    """Find competitors for specific keywords using DataForSEO Labs."""
+    if len(keywords) > 10:
+        keywords = keywords[:10]
+    
+    limit = validate_limit(limit, 100, "DataForSEO")
+    log_api_usage("DataForSEO", "serp_competitors", len(keywords), cost_estimate=0.02)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    location_code = 2840 if location == "United States" else 2826
+    
+    payload = [{
+        "keywords": keywords,
+        "location_code": location_code,
+        "language_name": "English",
+        "item_types": ["organic"],
+        "limit": limit
+    }]
+    
+    data = await make_dataforseo_request("dataforseo_labs/google/serp_competitors/live", payload)
+    
+    if not data or "tasks" not in data:
+        return f"❌ Failed to get SERP competitors for keywords: {', '.join(keywords)}"
+    
+    task = data["tasks"][0]
+    if task.get("status_code") != 20000:
+        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+    
+    results = task.get("result", [])
+    if not results:
+        return f"❌ No competitor data found for keywords"
+    
+    items = results[0].get("items", [])
+    if not items:
+        return f"📊 No competitors found for keywords: {', '.join(keywords)}"
+    
+    # Format results
+    formatted_competitors = []
+    
+    for i, item in enumerate(items[:limit], 1):
+        domain = item.get("domain", "Unknown")
+        metrics = item.get("metrics", {}).get("organic", {})
+        
+        avg_position = metrics.get("avg_position", 0)
+        median_position = metrics.get("median_position", 0)
+        visibility = metrics.get("visibility", 0)
+        etv = metrics.get("etv", 0)
+        count = metrics.get("count", 0)
+        
+        formatted_competitors.append(
+            f"**{i}. {domain}**\n"
+            f"📊 Avg Position: {avg_position:.1f}\n"
+            f"📈 Median Position: {median_position:.1f}\n"
+            f"👁️ Visibility: {visibility:.2f}%\n"
+            f"🚀 Est. Traffic: {etv:,.0f}/month\n"
+            f"🔍 Ranking Keywords: {count:,}"
+        )
+    
+    header = f"""🎯 **SERP Competitors Analysis**
+
+📍 Location: {location}
+🔍 Keywords: {', '.join(keywords)}
+📊 Found {len(items)} competing domains
+
+**Top Competitors:**"""
+    
+    return header + "\n\n" + "\n\n---\n\n".join(formatted_competitors)
+
+async def get_keywords_for_site(domain: str, location: str = "United States", limit: int = 50) -> str:
+    """Discover keyword opportunities for a domain using DataForSEO Labs."""
+    limit = validate_limit(limit, 1000, "DataForSEO")
+    
+    log_api_usage("DataForSEO", "keywords_for_site", limit, cost_estimate=0.02)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    location_code = 2840 if location == "United States" else 2826
+    
+    payload = [{
+        "target": domain,
+        "location_code": location_code,
+        "language_name": "English",
+        "limit": limit
+    }]
+    
+    data = await make_dataforseo_request("dataforseo_labs/google/keywords_for_site/live", payload)
+    
+    if not data or "tasks" not in data:
+        return f"❌ Failed to get keyword opportunities for {domain}"
+    
+    task = data["tasks"][0]
+    if task.get("status_code") != 20000:
+        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+    
+    results = task.get("result", [])
+    if not results:
+        return f"❌ No keyword opportunities found for {domain}"
+    
+    items = results[0].get("items", [])
+    if not items:
+        return f"📊 No keyword suggestions available for {domain}"
+    
+    # Format results
+    formatted_keywords = []
+    total_volume = 0
+    
+    for i, item in enumerate(items[:limit], 1):
+        keyword_data = item.get("keyword_data", {})
+        keyword = keyword_data.get("keyword", "Unknown")
+        
+        keyword_info = keyword_data.get("keyword_info", {})
+        volume = keyword_info.get("search_volume", 0)
+        competition = keyword_info.get("competition", 0)
+        cpc = keyword_info.get("cpc", 0)
+        
+        total_volume += volume
+        
+        formatted_keywords.append(
+            f"**{i}. {keyword}**\n"
+            f"📊 Volume: {volume:,}/month\n"
+            f"💪 Competition: {competition:.1f}/100\n"
+            f"💰 CPC: ${cpc:.2f}"
+        )
+    
+    header = f"""💡 **Keyword Opportunities for {domain}**
+
+📍 Location: {location}
+🔍 Total Suggestions: {len(items):,}
+📊 Combined Volume: {total_volume:,}/month
+
+**Top {min(limit, len(items))} Opportunities:**"""
+    
+    return header + "\n\n" + "\n\n---\n\n".join(formatted_keywords)
+
+async def get_domain_intersection(domain1: str, domain2: str, location: str = "United States", limit: int = 20) -> str:
+    """Compare keyword overlap between two domains using DataForSEO Labs."""
+    limit = validate_limit(limit, 1000, "DataForSEO")
+    
+    log_api_usage("DataForSEO", "domain_intersection", limit, cost_estimate=0.03)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    location_code = 2840 if location == "United States" else 2826
+    
+    payload = [{
+        "target1": domain1,
+        "target2": domain2,
+        "location_code": location_code,
+        "language_name": "English",
+        "limit": limit
+    }]
+    
+    data = await make_dataforseo_request("dataforseo_labs/google/domain_intersection/live", payload)
+    
+    if not data or "tasks" not in data:
+        return f"❌ Failed to compare {domain1} vs {domain2}"
+    
+    task = data["tasks"][0]
+    if task.get("status_code") != 20000:
+        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+    
+    results = task.get("result", [])
+    if not results:
+        return f"❌ No intersection data found between {domain1} and {domain2}"
+    
+    items = results[0].get("items", [])
+    if not items:
+        return f"📊 No shared keywords found between {domain1} and {domain2}"
+    
+    # Format results
+    formatted_intersections = []
+    total_volume = 0
+    
+    for i, item in enumerate(items[:limit], 1):
+        keyword_data = item.get("keyword_data", {})
+        keyword = keyword_data.get("keyword", "Unknown")
+        
+        keyword_info = keyword_data.get("keyword_info", {})
+        volume = keyword_info.get("search_volume", 0)
+        
+        # Get positions for both domains
+        serp_info1 = item.get("first_domain_serp_element", {}).get("serp_item", {})
+        serp_info2 = item.get("second_domain_serp_element", {}).get("serp_item", {})
+        
+        pos1 = serp_info1.get("rank_group", 0)
+        pos2 = serp_info2.get("rank_group", 0)
+        
+        total_volume += volume
+        
+        formatted_intersections.append(
+            f"**{i}. {keyword}**\n"
+            f"📊 Volume: {volume:,}/month\n"
+            f"🥇 {domain1}: Position {pos1}\n"
+            f"🥈 {domain2}: Position {pos2}"
+        )
+    
+    header = f"""🔍 **Domain Intersection: {domain1} vs {domain2}**
+
+📍 Location: {location}
+🤝 Shared Keywords: {len(items):,}
+📊 Combined Volume: {total_volume:,}/month
+
+**Top {min(limit, len(items))} Shared Keywords:**"""
+    
+    return header + "\n\n" + "\n\n---\n\n".join(formatted_intersections)
 
 async def competitor_analysis(domain: str, analysis_type: str = "organic", limit: int = 10) -> str:
     """Analyze competitor rankings and backlinks using DataForSEO."""
