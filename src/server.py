@@ -3023,15 +3023,27 @@ async def get_ranked_keywords(domain: str, location: str = "United States", limi
     if not items:
         return f"📊 No keywords found for {domain}"
     
+    # DEBUG: Show first item structure
+    if items:
+        first_item = items[0]
+        debug_info = f"DEBUG Item structure: {str(first_item)[:200]}..."
+    
     # Format results
     formatted_keywords = []
     total_volume = 0
     
     for i, item in enumerate(items[:limit], 1):
-        keyword = item.get("keyword", "Unknown")
-        position = item.get("keyword_data", {}).get("keyword_info", {}).get("serp_info", {}).get("rank_group", 0)
-        volume = item.get("keyword_data", {}).get("keyword_info", {}).get("search_volume", 0)
-        difficulty = item.get("keyword_data", {}).get("keyword_info", {}).get("keyword_difficulty", 0)
+        # DataForSEO Labs has different structure
+        keyword_data = item.get("keyword_data", {})
+        keyword = keyword_data.get("keyword", item.get("keyword", "Unknown"))
+        
+        keyword_info = keyword_data.get("keyword_info", {})
+        volume = keyword_info.get("search_volume", 0)
+        difficulty = keyword_info.get("keyword_difficulty", 0)
+        
+        # Get ranking position
+        serp_info = keyword_data.get("serp_info", {})
+        position = serp_info.get("rank_group", item.get("ranked_serp_element", {}).get("serp_item", {}).get("rank_group", 0))
         
         total_volume += volume
         
@@ -3093,8 +3105,10 @@ async def get_historical_rankings(domain: str, location: str = "United States") 
 """
     
     for item in items[-6:]:  # Last 6 months
-        date = item.get("date", "Unknown")
-        metrics = item.get("metrics", {}).get("organic", {})
+        date = item.get("date", item.get("month", "Unknown"))
+        metrics = item.get("metrics", {})
+        if "organic" in metrics:
+            metrics = metrics["organic"]
         
         keywords = metrics.get("count", 0)
         traffic = metrics.get("etv", 0)
