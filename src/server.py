@@ -609,6 +609,21 @@ TOOLS = [
             },
             "required": ["target"]
         }
+    },
+    {
+        "name": "test_dataforseo_endpoints",
+        "description": "Test DataForSEO API endpoint access to check plan capabilities",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to test with",
+                    "default": "nansen.ai"
+                }
+            },
+            "required": []
+        }
     }
 ]
 
@@ -839,6 +854,8 @@ async def handle_mcp_message_internal(message: dict):
             result = await lighthouse_bulk_audit(**arguments)
         elif tool_name == "onpage_seo_audit":
             result = await onpage_seo_audit(**arguments)
+        elif tool_name == "test_dataforseo_endpoints":
+            result = await test_dataforseo_endpoints(**arguments)
         else:
             return {
                 "jsonrpc": "2.0",
@@ -1123,6 +1140,8 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 result = await lighthouse_bulk_audit(**arguments)
             elif tool_name == "onpage_seo_audit":
                 result = await onpage_seo_audit(**arguments)
+            elif tool_name == "test_dataforseo_endpoints":
+                result = await test_dataforseo_endpoints(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -2825,6 +2844,63 @@ async def keyword_research(keywords: List[str], location: str = "United States",
     log_api_usage("DataForSEO", "keywords", len(keywords), len(results), len(keywords) * 0.001)
     header = f"🔍 **Keyword Research Results** ({location}, {language})\n\nAnalyzed {len(results)} keywords"
     return header + "\n\n" + "\n\n---\n\n".join(formatted_results)
+
+async def test_dataforseo_endpoints(domain: str = "nansen.ai") -> str:
+    """Test DataForSEO Labs API endpoints to check plan access."""
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    # Test endpoints
+    endpoints_to_test = [
+        ("dataforseo_labs/google/ranked_keywords/live", "Ranked Keywords"),
+        ("dataforseo_labs/google/historical_rank_overview/live", "Historical Rankings"), 
+        ("dataforseo_labs/google/top_pages/live", "Top Pages"),
+        ("keywords_data/google_ads/search_volume/live", "Search Volume"),
+        ("serp/google/organic/live", "SERP Results"),
+        ("on_page/task_post", "OnPage Audit")
+    ]
+    
+    results = []
+    
+    for endpoint, name in endpoints_to_test:
+        try:
+            # Test with minimal payload
+            if "ranked_keywords" in endpoint:
+                payload = [{"target": domain, "location_code": 2840, "language_code": "en", "limit": 1}]
+            elif "historical_rank" in endpoint:
+                payload = [{"target": domain, "location_code": 2840, "language_code": "en"}]
+            elif "top_pages" in endpoint:
+                payload = [{"target": domain, "location_code": 2840, "language_code": "en", "limit": 1}]
+            elif "search_volume" in endpoint:
+                payload = [{"keywords": ["test"], "location_name": "United States", "language_code": "en"}]
+            elif "serp" in endpoint:
+                payload = [{"keyword": "test", "location_name": "United States", "language_code": "en"}]
+            elif "on_page" in endpoint:
+                payload = [{"target": domain, "max_crawl_pages": 1}]
+            else:
+                payload = [{}]
+            
+            response = await make_dataforseo_request(endpoint, payload)
+            
+            if response:
+                status_code = response.get("status_code", 0)
+                if status_code == 20000:
+                    results.append(f"✅ **{name}** - Available")
+                elif status_code == 40101:
+                    results.append(f"❌ **{name}** - Insufficient credits")
+                elif status_code == 40102: 
+                    results.append(f"❌ **{name}** - Plan doesn't support this endpoint")
+                elif status_code == 40401:
+                    results.append(f"❌ **{name}** - Authentication failed")
+                else:
+                    results.append(f"⚠️ **{name}** - Status {status_code}: {response.get('status_message', 'Unknown')}")
+            else:
+                results.append(f"❌ **{name}** - No response")
+                
+        except Exception as e:
+            results.append(f"❌ **{name}** - Error: {str(e)[:50]}")
+    
+    return f"🔍 **DataForSEO API Endpoint Access Check**\n\n" + "\n".join(results)
 
 async def competitor_analysis(domain: str, analysis_type: str = "organic", limit: int = 10) -> str:
     """Analyze competitor rankings and backlinks using DataForSEO."""
