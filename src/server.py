@@ -3180,8 +3180,8 @@ async def get_onpage_results(task_id: str, domain: str) -> str:
         if not summary_data:
             return f"❌ Could not retrieve results for task {task_id}"
         
-        if "tasks" not in summary_data:
-            return f"❌ Invalid response format for task {task_id}"
+        if "tasks" not in summary_data or not summary_data["tasks"]:
+            return f"❌ Invalid response format for task {task_id}. Response: {str(summary_data)[:100]}"
         
         task = summary_data["tasks"][0]
         if task.get("status_code") != 20000:
