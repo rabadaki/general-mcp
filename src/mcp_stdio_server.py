@@ -1707,7 +1707,13 @@ async def search_serp(query: str, location: str = "United States", language: str
         log_api_usage("DataForSEO", "serp", limit, 0, 0.0025)
         return f"❌ SERP API error: {task.get('status_message', 'Unknown error')}"
     
-    results = task.get("result", [{}])[0].get("items", [])[:limit]
+    # Safely extract results with defensive programming
+    result_data = task.get("result", [])
+    if not result_data or not isinstance(result_data, list):
+        log_api_usage("DataForSEO", "serp", limit, 0, 0.0025)
+        return f"❌ Invalid SERP API response structure for '{query}'"
+    
+    results = result_data[0].get("items", [])[:limit] if result_data else []
     
     if not results:
         log_api_usage("DataForSEO", "serp", limit, 0, 0.0025)
@@ -1715,9 +1721,23 @@ async def search_serp(query: str, location: str = "United States", language: str
     
     formatted_results = []
     for i, result in enumerate(results, 1):
-        title = result.get("title", "No title")
-        url = result.get("url", "")
-        description = result.get("description", "")[:200] + "..." if len(result.get("description", "")) > 200 else result.get("description", "")
+        # Safe string extraction with None protection
+        title = (result.get("title") or "No title").strip()
+        url = (result.get("url") or "").strip()
+        description = (result.get("description") or "").strip()
+        
+        # Use domain as fallback for missing title
+        if not title or title == "No title":
+            domain = (result.get("domain") or "").strip()
+            if domain:
+                title = f"Website: {domain}"
+        
+        # Safely handle description truncation
+        if description and len(description) > 200:
+            description = description[:197] + "..."
+        elif not description:
+            description = "No description available"
+            
         position = result.get("rank_absolute", i)
         
         formatted_results.append(f"**{position}. {title}**\n🔗 {url}\n📝 {description}")
