@@ -3222,7 +3222,9 @@ async def get_onpage_results(task_id: str, domain: str) -> str:
         return report
         
     except Exception as e:
-        return f"❌ Error retrieving results: {str(e)[:100]}..."
+        import traceback
+        error_details = traceback.format_exc()
+        return f"❌ Error retrieving results for {task_id}: {str(e)}\n\nDebug info: {error_details[:200]}..."
 
 async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, task_id: str = None, **kwargs) -> str:
     """OnPage SEO audit - creates new task or retrieves existing results"""
