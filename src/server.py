@@ -3143,9 +3143,10 @@ def extract_domain_for_onpage(target: str) -> str:
     return domain
 
 async def onpage_seo_audit(target: str, **kwargs) -> str:
-    """DEBUG: Test with domain extraction"""
+    """DEBUG: Test with domain extraction and datetime"""
     domain = extract_domain_for_onpage(target)
-    return f"🔍 DEBUG: OnPage audit for domain {domain} - extraction works!"
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return f"🔍 DEBUG: OnPage audit for {domain} at {timestamp} - datetime works!"
 
 # ============================================================================
 # MAIN APPLICATION
