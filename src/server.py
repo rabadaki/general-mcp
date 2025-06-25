@@ -3174,53 +3174,45 @@ def extract_domain_for_onpage(target: str) -> str:
 async def get_onpage_results(task_id: str, domain: str) -> str:
     """Retrieve OnPage audit results for a given task ID."""
     try:
-        # First check if task is ready
-        ready_data = await make_dataforseo_request("on_page/tasks_ready", [])
+        # Skip tasks_ready check and try to get results directly
+        # Try multiple endpoint formats for summary
+        endpoints_to_try = [
+            ("on_page/summary", [{"id": task_id}]),
+            (f"on_page/summary/{task_id}", []),
+            ("on_page/pages", [{"id": task_id}])
+        ]
         
-        if not ready_data:
-            return f"❌ Could not check task status for {task_id}"
-        
-        # Check if our task is in the ready list
-        ready_tasks = ready_data.get("tasks", [])
-        if not ready_tasks:
-            return f"⏳ No OnPage tasks are ready yet. Task {task_id} may still be processing.\n\nDEBUG: Ready data response: {str(ready_data)[:300]}"
-        
-        # Look for our specific task
-        our_task = None
-        for task_info in ready_tasks:
-            if task_info.get("result") and len(task_info["result"]) > 0:
-                if task_info["result"][0].get("id") == task_id:
-                    our_task = task_info
-                    break
-        
-        if not our_task:
-            # Debug: show what tasks are actually ready
-            ready_task_ids = []
-            for task_info in ready_tasks:
-                if task_info.get("result") and len(task_info["result"]) > 0:
-                    ready_task_ids.append(task_info["result"][0].get("id", "unknown"))
+        for endpoint, payload in endpoints_to_try:
+            summary_data = await make_dataforseo_request(endpoint, payload)
             
-            return f"⏳ Task {task_id} is not ready yet.\n\nDEBUG: Found {len(ready_tasks)} ready tasks with IDs: {ready_task_ids[:5]}"
-        
-        # Task is ready, return basic status from the ready task info
-        task_result = our_task.get("result", [{}])[0]
-        status_message = our_task.get("status_message", "Task completed")
-        
-        # For now, return basic info since detailed summary endpoint has issues
-        report = f"""✅ **OnPage SEO Audit Task Complete for {domain}**
+            if summary_data and summary_data.get("status_code") != 40502:  # Not "POST Data Is Empty"
+                if "tasks" in summary_data and summary_data["tasks"]:
+                    task = summary_data["tasks"][0]
+                    
+                    if task.get("status_code") == 20000:
+                        # Success! Task is completed
+                        return f"""✅ **OnPage SEO Audit Results for {domain}**
 
-📊 **Status:** {status_message}
+📊 **Status:** Task completed successfully
 🆔 **Task ID:** {task_id}
+🔗 **Endpoint:** {endpoint}
 
-📋 **Note:** Task has completed successfully. The detailed summary endpoint is currently having issues with the API format.
+📋 **Results Retrieved:** The task has been completed and results are available.
 
-To get detailed results, you may need to:
-1. Check the DataForSEO dashboard directly
-2. Or wait for the API endpoint format to be fixed
+💡 **Next Steps:** 
+- Detailed parsing of results can be implemented
+- Current implementation confirms task completion
+- Data is available from DataForSEO API"""
 
-🔗 The task was successfully created and processed by DataForSEO."""
+                    else:
+                        return f"❌ Task status code: {task.get('status_code')} - {task.get('status_message', 'Unknown')}"
+                
+                else:
+                    # Show what we got for debugging
+                    return f"⏳ Task {task_id} - Got response from {endpoint} but no valid tasks array.\n\nResponse: {str(summary_data)[:200]}"
         
-        return report
+        # If all endpoints failed
+        return f"❌ Could not retrieve results for task {task_id} from any endpoint. Task may still be processing or may have expired."
         
     except Exception as e:
         import traceback
