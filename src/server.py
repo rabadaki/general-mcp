@@ -778,6 +778,25 @@ TOOLS = [
             },
             "required": ["domain1", "domain2"]
         }
+    },
+    {
+        "name": "debug_dataforseo_response",
+        "description": "Debug DataForSEO API responses to understand data structure",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "endpoint": {
+                    "type": "string",
+                    "description": "Endpoint to debug: keywords_for_site, relevant_pages, domain_intersection"
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to test with",
+                    "default": "nansen.ai"
+                }
+            },
+            "required": ["endpoint"]
+        }
     }
 ]
 
@@ -1022,6 +1041,8 @@ async def handle_mcp_message_internal(message: dict):
             result = await get_keywords_for_site(**arguments)
         elif tool_name == "get_domain_intersection":
             result = await get_domain_intersection(**arguments)
+        elif tool_name == "debug_dataforseo_response":
+            result = await debug_dataforseo_response(**arguments)
         else:
             return {
                 "jsonrpc": "2.0",
@@ -1320,6 +1341,8 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 result = await get_keywords_for_site(**arguments)
             elif tool_name == "get_domain_intersection":
                 result = await get_domain_intersection(**arguments)
+            elif tool_name == "debug_dataforseo_response":
+                result = await debug_dataforseo_response(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -3090,6 +3113,39 @@ async def test_dataforseo_endpoints(domain: str = "nansen.ai") -> str:
     
     return f"🔍 **DataForSEO API Endpoint Access Check**\n\n" + "\n".join(results)
 
+async def debug_dataforseo_response(endpoint: str, domain: str = "nansen.ai") -> str:
+    """Debug DataForSEO API responses to understand data structure."""
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    if endpoint == "keywords_for_site":
+        payload = [{"target": domain, "location_code": 2840, "language_name": "English", "limit": 1}]
+        api_endpoint = "dataforseo_labs/google/keywords_for_site/live"
+    elif endpoint == "relevant_pages":
+        payload = [{"target": domain, "location_code": 2840, "language_name": "English", "limit": 1}]
+        api_endpoint = "dataforseo_labs/google/relevant_pages/live"
+    elif endpoint == "domain_intersection":
+        payload = [{"target1": domain, "target2": "chainalysis.com", "location_code": 2840, "language_name": "English", "limit": 1}]
+        api_endpoint = "dataforseo_labs/google/domain_intersection/live"
+    else:
+        return f"❌ Unknown endpoint: {endpoint}"
+    
+    data = await make_dataforseo_request(api_endpoint, payload)
+    
+    if not data:
+        return f"❌ No response from {endpoint}"
+    
+    # Show the raw structure
+    return f"""🔍 **Debug Response for {endpoint}**
+
+**Status:** {data.get('status_code', 'Unknown')}
+**Message:** {data.get('status_message', 'Unknown')}
+
+**Full Response Structure:**
+```json
+{str(data)[:1500]}...
+```"""
+
 async def get_ranked_keywords(domain: str, location: str = "United States", limit: int = 100) -> str:
     """Get all keywords a domain ranks for using DataForSEO Labs."""
     limit = validate_limit(limit, 1000, "DataForSEO")
@@ -3268,7 +3324,8 @@ async def get_top_pages(domain: str, location: str = "United States", limit: int
     formatted_pages = []
     
     for i, item in enumerate(items[:limit], 1):
-        page = item.get("page", "Unknown")
+        # Fix: Use correct field name for page URL
+        page = item.get("page_address", item.get("page", "Unknown"))
         metrics = item.get("metrics", {}).get("organic", {})
         
         keywords = metrics.get("count", 0)
@@ -3396,6 +3453,11 @@ async def get_keywords_for_site(domain: str, location: str = "United States", li
     if not items:
         return f"📊 No keyword suggestions available for {domain}"
     
+    # DEBUG: Show actual data structure
+    if items:
+        first_item = items[0]
+        debug_sample = f"DEBUG - First item keys: {list(first_item.keys())}\nSample data: {str(first_item)[:300]}"
+    
     # Format results
     formatted_keywords = []
     total_volume = 0
@@ -3475,12 +3537,17 @@ async def get_domain_intersection(domain1: str, domain2: str, location: str = "U
         keyword_info = keyword_data.get("keyword_info", {})
         volume = keyword_info.get("search_volume", 0)
         
-        # Get positions for both domains
-        serp_info1 = item.get("first_domain_serp_element", {}).get("serp_item", {})
-        serp_info2 = item.get("second_domain_serp_element", {}).get("serp_item", {})
+        # Get positions for both domains - fix field paths
+        serp_info1 = item.get("first_domain_serp_element", {})
+        serp_info2 = item.get("second_domain_serp_element", {})
         
-        pos1 = serp_info1.get("rank_group", 0)
-        pos2 = serp_info2.get("rank_group", 0)
+        # Try multiple possible field paths
+        pos1 = (serp_info1.get("serp_item", {}).get("rank_group", 0) or 
+                serp_info1.get("rank_group", 0) or
+                serp_info1.get("position", 0))
+        pos2 = (serp_info2.get("serp_item", {}).get("rank_group", 0) or 
+                serp_info2.get("rank_group", 0) or
+                serp_info2.get("position", 0))
         
         total_volume += volume
         
