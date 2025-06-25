@@ -584,6 +584,20 @@ TOOLS = [
             },
             "required": ["urls"]
         }
+    },
+    {
+        "name": "onpage_seo_audit",
+        "description": "DEBUG: OnPage SEO audit tool",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "Website URL to analyze"
+                }
+            },
+            "required": ["target"]
+        }
     }
 ]
 
