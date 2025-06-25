@@ -3190,54 +3190,65 @@ async def get_onpage_results(task_id: str, domain: str) -> str:
                     task = summary_data["tasks"][0]
                     
                     if task.get("status_code") == 20000:
-                        # Success! Parse the actual results
+                        # Success! Parse the actual results based on real API structure
                         results = task.get("result", [])
                         if not results:
                             return f"✅ Task completed but no results data available for {task_id}"
                         
                         result = results[0]
                         
-                        # Extract key metrics
-                        crawl_progress = result.get("crawl_progress", {})
-                        pages_crawled = crawl_progress.get("pages_crawled", 0)
-                        pages_in_queue = crawl_progress.get("pages_in_queue", 0)
+                        # Extract crawl info
+                        crawl_status = result.get("crawl_status", {})
+                        pages_crawled = crawl_status.get("pages_crawled", 0)
+                        pages_in_queue = crawl_status.get("pages_in_queue", 0)
+                        max_crawl_pages = crawl_status.get("max_crawl_pages", 0)
                         
-                        # Extract issues summary
-                        onpage_score = result.get("onpage_score", 0)
-                        errors = result.get("errors", 0)
-                        warnings = result.get("warnings", 0)
-                        notices = result.get("notices", 0)
+                        # Extract domain info
+                        domain_info = result.get("domain_info", {})
+                        crawl_start = domain_info.get("crawl_start", "Unknown")
+                        crawl_end = domain_info.get("crawl_end", "Unknown")
+                        total_pages = domain_info.get("total_pages", 0)
                         
-                        # Extract page-level issues if available
-                        pages = result.get("pages", [])
+                        # Extract page metrics
+                        page_metrics = result.get("page_metrics", {})
+                        onpage_score = page_metrics.get("onpage_score", 0)
+                        links_external = page_metrics.get("links_external", 0)
+                        links_internal = page_metrics.get("links_internal", 0)
+                        broken_links = page_metrics.get("broken_links", 0)
+                        duplicate_title = page_metrics.get("duplicate_title", 0)
+                        duplicate_description = page_metrics.get("duplicate_description", 0)
+                        
+                        # Extract key issues from checks
+                        checks = page_metrics.get("checks", {})
+                        no_description = checks.get("no_description", 0)
+                        title_too_long = checks.get("title_too_long", 0)
+                        no_h1_tag = checks.get("no_h1_tag", 0)
+                        no_image_alt = checks.get("no_image_alt", 0)
                         
                         # Format comprehensive report
                         report = f"""🔍 **OnPage SEO Audit Results for {domain}**
 
 📊 **Crawl Summary:**
-📄 Pages Crawled: {pages_crawled:,}
+📄 Pages Crawled: {pages_crawled:,} / {max_crawl_pages:,}
 🔄 Pages in Queue: {pages_in_queue:,}
+📋 Total Pages Found: {total_pages:,}
 💯 OnPage Score: {onpage_score:.1f}/100
 
-🚨 **Issues Found:**
-❌ Errors: {errors:,}
-⚠️ Warnings: {warnings:,}
-ℹ️ Notices: {notices:,}
+🔗 **Link Analysis:**
+🌐 External Links: {links_external:,}
+🏠 Internal Links: {links_internal:,}
+💔 Broken Links: {broken_links:,}
 
-📋 **Pages Analyzed:** {len(pages):,}
+🚨 **Content Issues:**
+📝 Duplicate Titles: {duplicate_title:,}
+📄 Duplicate Descriptions: {duplicate_description:,}
+❌ Missing Descriptions: {no_description:,}
+📏 Titles Too Long: {title_too_long:,}
+🏷️ Missing H1 Tags: {no_h1_tag:,}
+🖼️ Missing Image Alt Text: {no_image_alt:,}
 
+⏰ **Crawl Duration:** {crawl_start} → {crawl_end}
 🆔 **Task ID:** {task_id}"""
-                        
-                        # Add top issues if available
-                        if pages:
-                            report += f"\n\n🔍 **Sample Page Analysis:**"
-                            for i, page in enumerate(pages[:3]):  # Show first 3 pages
-                                page_url = page.get("page", "Unknown")
-                                page_errors = page.get("errors", 0)
-                                page_warnings = page.get("warnings", 0)
-                                
-                                report += f"\n\n**{i+1}. {page_url}**"
-                                report += f"\n❌ Errors: {page_errors} | ⚠️ Warnings: {page_warnings}"
                         
                         return report
 
