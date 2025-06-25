@@ -2800,6 +2800,11 @@ async def search_serp(query: str, location: str = "United States", language: str
 
 async def keyword_research(keywords: List[str], location: str = "United States", language: str = "en") -> str:
     """Get keyword suggestions and search volume data using DataForSEO."""
+    
+    # TEMPORARY: Test DataForSEO Labs endpoints
+    if keywords and keywords[0] == "TEST_ENDPOINTS":
+        return await test_dataforseo_endpoints("nansen.ai")
+    
     if len(keywords) > 10:
         keywords = keywords[:10]
     
