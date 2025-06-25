@@ -3175,10 +3175,16 @@ async def onpage_seo_audit(target: str, max_crawl_pages: int = 100, **kwargs) ->
     # Test the try/except structure
     try:
         # TEST THE ACTUAL API CALL - suspected culprit
-        task_data = await make_dataforseo_request("on_page/task_post/", task_payload)
+        task_data = await make_dataforseo_request("on_page/task_post", task_payload)
         
-        if not task_data or "tasks" not in task_data:
-            return f"❌ OnPage audit task creation failed for '{domain}'"
+        if not task_data:
+            return f"❌ OnPage API returned no data for '{domain}'"
+        
+        if "tasks" not in task_data:
+            # Simple debug - show if we got an error response
+            if "status_code" in task_data:
+                return f"❌ OnPage API error {task_data.get('status_code')}: {task_data.get('status_message', 'Unknown')[:100]}"
+            return f"❌ OnPage API invalid response for '{domain}'"
         
         task = task_data["tasks"][0]
         if task.get("status_code") != 20000:
