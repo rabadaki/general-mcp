@@ -3174,8 +3174,8 @@ def extract_domain_for_onpage(target: str) -> str:
 async def get_onpage_results(task_id: str, domain: str) -> str:
     """Retrieve OnPage audit results for a given task ID."""
     try:
-        # Get summary results directly
-        summary_data = await make_dataforseo_request(f"on_page/summary/{task_id}", [])
+        # Get summary results directly - task ID should be in payload, not URL
+        summary_data = await make_dataforseo_request("on_page/summary", [{"id": task_id}])
         
         if not summary_data:
             return f"❌ Could not retrieve results for task {task_id}"
