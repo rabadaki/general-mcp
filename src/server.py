@@ -624,6 +624,77 @@ TOOLS = [
             },
             "required": []
         }
+    },
+    {
+        "name": "get_ranked_keywords",
+        "description": "Get all keywords a domain ranks for with position, volume, and difficulty data",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to analyze (e.g., 'example.com')"
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Target location",
+                    "default": "United States"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum keywords to return",
+                    "default": 100,
+                    "minimum": 1,
+                    "maximum": 1000
+                }
+            },
+            "required": ["domain"]
+        }
+    },
+    {
+        "name": "get_historical_rankings",
+        "description": "Get historical ranking trends showing keyword portfolio growth over time",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to analyze (e.g., 'example.com')"
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Target location",
+                    "default": "United States"
+                }
+            },
+            "required": ["domain"]
+        }
+    },
+    {
+        "name": "get_top_pages",
+        "description": "Get top performing pages by organic traffic and keyword rankings",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to analyze (e.g., 'example.com')"
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Target location",
+                    "default": "United States"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum pages to return",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 100
+                }
+            },
+            "required": ["domain"]
+        }
     }
 ]
 
@@ -856,6 +927,12 @@ async def handle_mcp_message_internal(message: dict):
             result = await onpage_seo_audit(**arguments)
         elif tool_name == "test_dataforseo_endpoints":
             result = await test_dataforseo_endpoints(**arguments)
+        elif tool_name == "get_ranked_keywords":
+            result = await get_ranked_keywords(**arguments)
+        elif tool_name == "get_historical_rankings":
+            result = await get_historical_rankings(**arguments)
+        elif tool_name == "get_top_pages":
+            result = await get_top_pages(**arguments)
         else:
             return {
                 "jsonrpc": "2.0",
@@ -1142,6 +1219,12 @@ async def handle_mcp_message(message: dict, request: Request, authorization: str
                 result = await onpage_seo_audit(**arguments)
             elif tool_name == "test_dataforseo_endpoints":
                 result = await test_dataforseo_endpoints(**arguments)
+            elif tool_name == "get_ranked_keywords":
+                result = await get_ranked_keywords(**arguments)
+            elif tool_name == "get_historical_rankings":
+                result = await get_historical_rankings(**arguments)
+            elif tool_name == "get_top_pages":
+                result = await get_top_pages(**arguments)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -2801,9 +2884,6 @@ async def search_serp(query: str, location: str = "United States", language: str
 async def keyword_research(keywords: List[str], location: str = "United States", language: str = "en") -> str:
     """Get keyword suggestions and search volume data using DataForSEO."""
     
-    # TEMPORARY: Test DataForSEO Labs endpoints
-    if keywords and keywords[0] == "TEST_ENDPOINTS":
-        return await test_dataforseo_endpoints("nansen.ai")
     
     if len(keywords) > 10:
         keywords = keywords[:10]
@@ -2906,6 +2986,188 @@ async def test_dataforseo_endpoints(domain: str = "nansen.ai") -> str:
             results.append(f"❌ **{name}** - Error: {str(e)[:50]}")
     
     return f"🔍 **DataForSEO API Endpoint Access Check**\n\n" + "\n".join(results)
+
+async def get_ranked_keywords(domain: str, location: str = "United States", limit: int = 100) -> str:
+    """Get all keywords a domain ranks for using DataForSEO Labs."""
+    limit = validate_limit(limit, 1000, "DataForSEO")
+    
+    log_api_usage("DataForSEO", "ranked_keywords", limit, cost_estimate=0.01)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    # Location codes: 2840 = United States
+    location_code = 2840 if location == "United States" else 2826  # Default to UK if not US
+    
+    payload = [{
+        "target": domain,
+        "location_code": location_code,
+        "language_code": "en",
+        "limit": limit
+    }]
+    
+    data = await make_dataforseo_request("dataforseo_labs/google/ranked_keywords/live", payload)
+    
+    if not data or "tasks" not in data:
+        return f"❌ Failed to get ranked keywords for {domain}"
+    
+    task = data["tasks"][0]
+    if task.get("status_code") != 20000:
+        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+    
+    results = task.get("result", [])
+    if not results:
+        return f"❌ No ranking data found for {domain}"
+    
+    items = results[0].get("items", [])
+    if not items:
+        return f"📊 No keywords found for {domain}"
+    
+    # Format results
+    formatted_keywords = []
+    total_volume = 0
+    
+    for i, item in enumerate(items[:limit], 1):
+        keyword = item.get("keyword", "Unknown")
+        position = item.get("keyword_data", {}).get("keyword_info", {}).get("serp_info", {}).get("rank_group", 0)
+        volume = item.get("keyword_data", {}).get("keyword_info", {}).get("search_volume", 0)
+        difficulty = item.get("keyword_data", {}).get("keyword_info", {}).get("keyword_difficulty", 0)
+        
+        total_volume += volume
+        
+        formatted_keywords.append(
+            f"**{i}. {keyword}**\n"
+            f"🏆 Position: {position}\n"
+            f"📊 Volume: {volume:,}/month\n"
+            f"💪 Difficulty: {difficulty}%"
+        )
+    
+    header = f"""🎯 **Ranked Keywords for {domain}**
+
+📍 Location: {location}
+🔍 Total Keywords: {len(items):,}
+📊 Combined Search Volume: {total_volume:,}/month
+
+**Top {min(limit, len(items))} Keywords:**"""
+    
+    return header + "\n\n" + "\n\n---\n\n".join(formatted_keywords)
+
+async def get_historical_rankings(domain: str, location: str = "United States") -> str:
+    """Get historical ranking overview using DataForSEO Labs."""
+    log_api_usage("DataForSEO", "historical_rankings", 1, cost_estimate=0.02)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    location_code = 2840 if location == "United States" else 2826
+    
+    payload = [{
+        "target": domain,
+        "location_code": location_code,
+        "language_code": "en"
+    }]
+    
+    data = await make_dataforseo_request("dataforseo_labs/google/historical_rank_overview/live", payload)
+    
+    if not data or "tasks" not in data:
+        return f"❌ Failed to get historical rankings for {domain}"
+    
+    task = data["tasks"][0]
+    if task.get("status_code") != 20000:
+        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+    
+    results = task.get("result", [])
+    if not results:
+        return f"❌ No historical data found for {domain}"
+    
+    items = results[0].get("items", [])
+    if not items:
+        return f"📊 No historical ranking data available for {domain}"
+    
+    # Format historical data
+    report = f"""📈 **Historical Ranking Overview for {domain}**
+
+📍 Location: {location}
+
+**Ranking Trends:**
+"""
+    
+    for item in items[-6:]:  # Last 6 months
+        date = item.get("date", "Unknown")
+        metrics = item.get("metrics", {}).get("organic", {})
+        
+        keywords = metrics.get("count", 0)
+        traffic = metrics.get("etv", 0)
+        avg_position = metrics.get("pos_1", 0) + metrics.get("pos_2_3", 0) + metrics.get("pos_4_10", 0)
+        
+        report += f"\n📅 **{date}**\n"
+        report += f"🔍 Keywords: {keywords:,}\n"
+        report += f"👁️ Est. Traffic: {traffic:,.0f}\n"
+        report += f"🏆 Top 10 Rankings: {avg_position}\n"
+    
+    return report
+
+async def get_top_pages(domain: str, location: str = "United States", limit: int = 10) -> str:
+    """Get top performing pages using DataForSEO Labs."""
+    limit = validate_limit(limit, 100, "DataForSEO")
+    
+    log_api_usage("DataForSEO", "top_pages", limit, cost_estimate=0.01)
+    
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        return "❌ DataForSEO credentials not configured"
+    
+    location_code = 2840 if location == "United States" else 2826
+    
+    payload = [{
+        "target": domain,
+        "location_code": location_code,
+        "language_code": "en",
+        "limit": limit
+    }]
+    
+    data = await make_dataforseo_request("dataforseo_labs/google/top_pages/live", payload)
+    
+    if not data or "tasks" not in data:
+        return f"❌ Failed to get top pages for {domain}"
+    
+    task = data["tasks"][0]
+    if task.get("status_code") != 20000:
+        return f"❌ API error: {task.get('status_message', 'Unknown error')}"
+    
+    results = task.get("result", [])
+    if not results:
+        return f"❌ No page data found for {domain}"
+    
+    items = results[0].get("items", [])
+    if not items:
+        return f"📊 No page ranking data found for {domain}"
+    
+    # Format results
+    formatted_pages = []
+    
+    for i, item in enumerate(items[:limit], 1):
+        page = item.get("page", "Unknown")
+        metrics = item.get("metrics", {}).get("organic", {})
+        
+        keywords = metrics.get("count", 0)
+        traffic = metrics.get("etv", 0)
+        top_keyword = metrics.get("top_keyword", {}).get("keyword", "N/A")
+        
+        formatted_pages.append(
+            f"**{i}. {page}**\n"
+            f"🔍 Keywords: {keywords:,}\n"
+            f"👁️ Est. Traffic: {traffic:,.0f}/month\n"
+            f"🎯 Top Keyword: {top_keyword}"
+        )
+    
+    header = f"""📄 **Top Performing Pages for {domain}**
+
+📍 Location: {location}
+📊 Showing top {min(limit, len(items))} pages by organic traffic
+
+**Top Pages:**"""
+    
+    return header + "\n\n" + "\n\n---\n\n".join(formatted_pages)
 
 async def competitor_analysis(domain: str, analysis_type: str = "organic", limit: int = 10) -> str:
     """Analyze competitor rankings and backlinks using DataForSEO."""
