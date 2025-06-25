@@ -3147,7 +3147,7 @@ async def get_top_pages(domain: str, location: str = "United States", limit: int
         "limit": limit
     }]
     
-    data = await make_dataforseo_request("dataforseo_labs/google/top_pages/live", payload)
+    data = await make_dataforseo_request("dataforseo_labs/google/relevant_pages/live", payload)
     
     if not data:
         return f"❌ No response from top pages API for {domain}"
