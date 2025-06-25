@@ -3174,27 +3174,24 @@ def extract_domain_for_onpage(target: str) -> str:
 async def get_onpage_results(task_id: str, domain: str) -> str:
     """Retrieve OnPage audit results for a given task ID."""
     try:
-        # Get task status first
-        status_data = await make_dataforseo_request(f"on_page/tasks_ready", [])
-        
-        if not status_data:
-            return f"❌ Could not check task status"
-        
-        # Get summary results
+        # Get summary results directly
         summary_data = await make_dataforseo_request(f"on_page/summary/{task_id}", [])
         
-        if not summary_data or "tasks" not in summary_data:
+        if not summary_data:
             return f"❌ Could not retrieve results for task {task_id}"
+        
+        if "tasks" not in summary_data:
+            return f"❌ Invalid response format for task {task_id}"
         
         task = summary_data["tasks"][0]
         if task.get("status_code") != 20000:
             return f"❌ Task not ready or error: {task.get('status_message', 'Unknown')}"
         
-        results = task.get("result", [])
+        results = task.get("result")
         if not results:
             return f"⏳ Task {task_id} is still processing. Please check back later."
         
-        result = results[0]
+        result = results[0] if isinstance(results, list) else results
         
         # Extract key metrics
         crawl_progress = result.get("crawl_progress", {})
