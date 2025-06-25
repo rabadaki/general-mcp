@@ -3174,14 +3174,36 @@ def extract_domain_for_onpage(target: str) -> str:
 async def get_onpage_results(task_id: str, domain: str) -> str:
     """Retrieve OnPage audit results for a given task ID."""
     try:
-        # Get summary results directly - task ID should be in payload, not URL
+        # First check if task is ready
+        ready_data = await make_dataforseo_request("on_page/tasks_ready", [])
+        
+        if not ready_data:
+            return f"❌ Could not check task status for {task_id}"
+        
+        # Check if our task is in the ready list
+        ready_tasks = ready_data.get("tasks", [])
+        if not ready_tasks:
+            return f"⏳ No OnPage tasks are ready yet. Task {task_id} may still be processing."
+        
+        # Look for our specific task
+        our_task = None
+        for task_info in ready_tasks:
+            if task_info.get("result") and len(task_info["result"]) > 0:
+                if task_info["result"][0].get("id") == task_id:
+                    our_task = task_info
+                    break
+        
+        if not our_task:
+            return f"⏳ Task {task_id} is not ready yet. Please check back in a few minutes."
+        
+        # Now get the summary results
         summary_data = await make_dataforseo_request("on_page/summary", [{"id": task_id}])
         
         if not summary_data:
             return f"❌ Could not retrieve results for task {task_id}"
         
         if "tasks" not in summary_data or not summary_data["tasks"]:
-            return f"❌ Invalid response format for task {task_id}. Response: {str(summary_data)[:100]}"
+            return f"❌ Invalid response format for task {task_id}. Response: {str(summary_data)[:200]}"
         
         task = summary_data["tasks"][0]
         if task.get("status_code") != 20000:
