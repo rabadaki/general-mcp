@@ -3324,8 +3324,8 @@ async def get_top_pages(domain: str, location: str = "United States", limit: int
     formatted_pages = []
     
     for i, item in enumerate(items[:limit], 1):
-        # Fix: Use correct field name for page URL
-        page = item.get("page_address", item.get("page", "Unknown"))
+        # Correct field name from documentation
+        page = item.get("page_address", "Unknown URL")
         metrics = item.get("metrics", {}).get("organic", {})
         
         keywords = metrics.get("count", 0)
@@ -3537,25 +3537,29 @@ async def get_domain_intersection(domain1: str, domain2: str, location: str = "U
         keyword_info = keyword_data.get("keyword_info", {})
         volume = keyword_info.get("search_volume", 0)
         
-        # Get positions for both domains - fix field paths
+        # Get positions using correct field structure from documentation
         serp_info1 = item.get("first_domain_serp_element", {})
         serp_info2 = item.get("second_domain_serp_element", {})
         
-        # Try multiple possible field paths
-        pos1 = (serp_info1.get("serp_item", {}).get("rank_group", 0) or 
-                serp_info1.get("rank_group", 0) or
-                serp_info1.get("position", 0))
-        pos2 = (serp_info2.get("serp_item", {}).get("rank_group", 0) or 
-                serp_info2.get("rank_group", 0) or
-                serp_info2.get("position", 0))
+        # Use correct field names from API documentation
+        pos1 = serp_info1.get("rank_absolute", serp_info1.get("rank_group", 0))
+        pos2 = serp_info2.get("rank_absolute", serp_info2.get("rank_group", 0))
+        
+        # Get domains and URLs for better display
+        domain1_url = serp_info1.get("url", "")
+        domain2_url = serp_info2.get("url", "")
         
         total_volume += volume
+        
+        # Show URLs if available, otherwise just positions
+        url1_display = f" ({domain1_url.split('/')[-1] if domain1_url else 'homepage'})" if domain1_url else ""
+        url2_display = f" ({domain2_url.split('/')[-1] if domain2_url else 'homepage'})" if domain2_url else ""
         
         formatted_intersections.append(
             f"**{i}. {keyword}**\n"
             f"📊 Volume: {volume:,}/month\n"
-            f"🥇 {domain1}: Position {pos1}\n"
-            f"🥈 {domain2}: Position {pos2}"
+            f"🥇 {domain1}: Position {pos1}{url1_display}\n"
+            f"🥈 {domain2}: Position {pos2}{url2_display}"
         )
     
     header = f"""🔍 **Domain Intersection: {domain1} vs {domain2}**
