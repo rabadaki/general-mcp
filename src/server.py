@@ -3430,13 +3430,13 @@ async def get_keywords_for_site(domain: str, location: str = "United States", li
     location_code = 2840 if location == "United States" else 2826
     
     payload = [{
-        "keyword": domain,
+        "target": domain,
         "location_code": location_code,
-        "language_name": "English",
+        "language_code": "en",
         "limit": limit
     }]
     
-    data = await make_dataforseo_request("dataforseo_labs/google/keyword_suggestions/live", payload)
+    data = await make_dataforseo_request("dataforseo_labs/google/keywords_for_site/live", payload)
     
     if not data or "tasks" not in data:
         return f"❌ Failed to get keyword opportunities for {domain}"
