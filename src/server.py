@@ -3391,13 +3391,12 @@ async def get_serp_competitors(keywords: List[str], location: str = "United Stat
     
     for i, item in enumerate(items[:limit], 1):
         domain = item.get("domain", "Unknown")
-        metrics = item.get("metrics", {}).get("organic", {})
         
-        avg_position = metrics.get("avg_position", 0)
-        median_position = metrics.get("median_position", 0)
-        visibility = metrics.get("visibility", 0)
-        etv = metrics.get("etv", 0)
-        count = metrics.get("count", 0)
+        avg_position = item.get("avg_position", 0)
+        median_position = item.get("median_position", 0)
+        visibility = item.get("visibility", 0)
+        etv = item.get("etv", 0)
+        count = item.get("keywords_count", 0)
         
         formatted_competitors.append(
             f"**{i}. {domain}**\n"
