@@ -627,7 +627,7 @@ TOOLS = [
     },
     {
         "name": "get_ranked_keywords",
-        "description": "Get all keywords a domain ranks for with position, volume, and difficulty data",
+        "description": "Get all keywords a domain ranks for with position, volume, difficulty, and traffic data. Can sort by actual pageviews or search volume.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -646,6 +646,12 @@ TOOLS = [
                     "default": 100,
                     "minimum": 1,
                     "maximum": 1000
+                },
+                "sort_by": {
+                    "type": "string",
+                    "description": "Sort keywords by 'pageviews' (estimated traffic to site) or 'searches' (keyword search volume)",
+                    "enum": ["pageviews", "searches"],
+                    "default": "pageviews"
                 }
             },
             "required": ["domain"]
