@@ -3146,8 +3146,8 @@ async def debug_dataforseo_response(endpoint: str, domain: str = "nansen.ai") ->
 {str(data)[:1500]}...
 ```"""
 
-async def get_ranked_keywords(domain: str, location: str = "United States", limit: int = 100) -> str:
-    """Get all keywords a domain ranks for using DataForSEO Labs."""
+async def get_ranked_keywords(domain: str, location: str = "United States", limit: int = 100, sort_by: str = "pageviews") -> str:
+    """Get all keywords a domain ranks for using DataForSEO Labs, sorted by pageviews or searches."""
     limit = validate_limit(limit, 1000, "DataForSEO")
     
     log_api_usage("DataForSEO", "ranked_keywords", limit, cost_estimate=0.01)
@@ -3158,11 +3158,16 @@ async def get_ranked_keywords(domain: str, location: str = "United States", limi
     # Location codes: 2840 = United States
     location_code = 2840 if location == "United States" else 2826  # Default to UK if not US
     
+    # Validate sort_by parameter
+    if sort_by not in ["pageviews", "searches"]:
+        sort_by = "pageviews"  # Default fallback
+    
     payload = [{
         "target": domain,
         "location_code": location_code,
         "language_code": "en",
-        "limit": limit
+        "limit": limit,
+        "order_by": ["ranked_serp_element.serp_item.etv,desc"] if sort_by == "pageviews" else ["keyword_data.keyword_info.search_volume,desc"]
     }]
     
     data = await make_dataforseo_request("dataforseo_labs/google/ranked_keywords/live", payload)
@@ -3182,10 +3187,6 @@ async def get_ranked_keywords(domain: str, location: str = "United States", limi
     if not items:
         return f"📊 No keywords found for {domain}"
     
-    # DEBUG: Show first item structure
-    if items:
-        first_item = items[0]
-        debug_info = f"DEBUG Item structure: {str(first_item)[:200]}..."
     
     # Format results
     formatted_keywords = []
@@ -3200,16 +3201,19 @@ async def get_ranked_keywords(domain: str, location: str = "United States", limi
         volume = keyword_info.get("search_volume", 0)
         difficulty = keyword_info.get("keyword_difficulty", 0)
         
-        # Get ranking position
-        serp_info = keyword_data.get("serp_info", {})
-        position = serp_info.get("rank_group", item.get("ranked_serp_element", {}).get("serp_item", {}).get("rank_group", 0))
+        # Get ranking position and traffic data
+        ranked_element = item.get("ranked_serp_element", {})
+        serp_item = ranked_element.get("serp_item", {})
+        position = serp_item.get("rank_group", 0)
+        etv = serp_item.get("etv", 0)  # Estimated traffic value
         
         total_volume += volume
         
         formatted_keywords.append(
             f"**{i}. {keyword}**\n"
             f"🏆 Position: {position}\n"
-            f"📊 Volume: {volume:,}/month\n"
+            f"📊 Search Volume: {volume:,}/month\n"
+            f"🚀 Est. Traffic: {etv:,.0f}/month\n"
             f"💪 Difficulty: {difficulty}%"
         )
     
