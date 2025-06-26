@@ -2284,10 +2284,7 @@ async def get_twitter_profile(username: str, get_followers: bool = False, get_fo
     }
     
     # Using Twitter profile actor V38PZzpEgOfeeWvZY (returns multiple profiles, need to filter)
-    print(f"DEBUG: Making Twitter profile API request for @{username}")
     data = await make_request(f"{APIFY_API_BASE}/V38PZzpEgOfeeWvZY/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=APIFY_TIMEOUT)
-    
-    print(f"DEBUG: Twitter API returned data type: {type(data)}, length: {len(data) if isinstance(data, list) else 'N/A'}")
     
     if not data:
         return f"❌ Failed to get profile for @{username}"
@@ -2433,10 +2430,7 @@ async def get_tiktok_user_videos(username: str, limit: int = 10, start_date: str
     
     # Use 90 second timeout as requested
     try:
-        print(f"DEBUG: Making TikTok API request for @{username}")
         data = await make_request(f"{APIFY_API_BASE}/clockworks~free-tiktok-scraper/run-sync-get-dataset-items", params={"token": APIFY_TOKEN}, json_data=payload, method="POST", timeout=90)
-        
-        print(f"DEBUG: TikTok API returned data type: {type(data)}, value: {str(data)[:200]}")
         
         # Validate data is a list and has content
         if data is None:
@@ -2448,7 +2442,6 @@ async def get_tiktok_user_videos(username: str, limit: int = 10, start_date: str
         if len(data) == 0:
             return f"❌ No videos found for @{username}. This could be due to:\n• Private account\n• No videos posted\n• TikTok rate limiting\n• Username not found"
         
-        print(f"DEBUG: TikTok validation passed, processing {len(data)} items")
     except Exception as e:
         return f"❌ TikTok API error for @{username}: {str(e)}"
     
@@ -4086,7 +4079,5 @@ if __name__ == "__main__":
     print(f"🌊 SSE streaming: http://0.0.0.0:{port}/mcp (GET)") 
     print(f"🏥 Health check: http://0.0.0.0:{port}/health")
     print(f"🔥 CACHE BUSTER: {datetime.now().isoformat()}")
-    print("🔥 AUTO-DEPLOY TEST - Railway should see this!")
-    print("✅ Auto-deploy TEST #6 - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    print("🚀 TOP PAGES ERROR DEBUGGING")
+    print("🚀 Server starting - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     uvicorn.run(app, host="0.0.0.0", port=port)
